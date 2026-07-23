@@ -1,0 +1,198 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-court: var(--court);
+  --color-court-line: var(--court-line);
+  --font-display: "Fredoka", "Quicksand", system-ui, sans-serif;
+  --font-sans: "Quicksand", system-ui, sans-serif;
+}
+
+:root, .dark {
+  --radius: 0.875rem;
+
+  /* Olimpio Neto — On Tennis brand palette
+     Primary #99cc00, Accent #ccff33, Deep #006633, Ink #003333.
+     Dark theme uses deep teal/green ink as background. */
+  --background: oklch(0.16 0.03 175);
+  --foreground: oklch(0.97 0.01 120);
+
+  --card: oklch(0.21 0.035 175);
+  --card-foreground: oklch(0.97 0.01 120);
+
+  --popover: oklch(0.21 0.035 175);
+  --popover-foreground: oklch(0.97 0.01 120);
+
+  /* #99cc00 — brand green */
+  --primary: oklch(0.78 0.21 128);
+  --primary-foreground: oklch(0.16 0.03 175);
+
+  --secondary: oklch(0.27 0.03 175);
+  --secondary-foreground: oklch(0.97 0.01 120);
+
+  --muted: oklch(0.24 0.03 175);
+  --muted-foreground: oklch(0.72 0.02 140);
+
+  /* #ccff33 — acid tennis-ball accent */
+  --accent: oklch(0.94 0.22 122);
+  --accent-foreground: oklch(0.16 0.03 175);
+
+  --destructive: oklch(0.65 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  --border: oklch(0.32 0.03 175);
+  --input: oklch(0.32 0.03 175);
+  --ring: oklch(0.78 0.21 128);
+
+  --court: oklch(0.42 0.1 235);
+  --court-line: oklch(0.96 0 0);
+
+  /* Brand solids for gradients */
+  --brand-lime: #99cc00;
+  --brand-acid: #ccff33;
+  --brand-deep: #006633;
+  --brand-ink: #003333;
+  --brand-sky: #33ccff;
+
+  --gradient-hero: radial-gradient(circle at 15% 15%, oklch(0.78 0.21 128 / 0.28), transparent 55%),
+    radial-gradient(circle at 85% 65%, oklch(0.55 0.12 235 / 0.18), transparent 55%),
+    radial-gradient(circle at 50% 100%, oklch(0.94 0.22 122 / 0.14), transparent 60%);
+  --shadow-glow: 0 20px 60px -20px oklch(0.78 0.21 128 / 0.55);
+  --shadow-soft: 0 12px 40px -16px oklch(0 0 0 / 0.6);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html { font-family: var(--font-sans); }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.02em; }
+}
+
+@utility hero-bg {
+  background-image: var(--gradient-hero);
+}
+@utility shadow-glow { box-shadow: var(--shadow-glow); }
+@utility shadow-soft { box-shadow: var(--shadow-soft); }
+
+/* Bouncing ball */
+@keyframes ball-bounce {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  45% { transform: translateY(0) scale(1, 1); }
+  50% { transform: translateY(2px) scale(1.15, 0.8); }
+  55% { transform: translateY(0) scale(1, 1); }
+  75% { transform: translateY(-180px) scale(0.95, 1.05); }
+}
+.animate-bounce-ball { animation: ball-bounce 1.6s cubic-bezier(0.6, 0, 0.4, 1) infinite; }
+
+@keyframes racket-hit {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  44% { transform: rotate(0deg) translateY(0); }
+  50% { transform: rotate(-2deg) translateY(5px); }
+  58% { transform: rotate(1.5deg) translateY(-3px); }
+  70% { transform: rotate(0deg) translateY(0); }
+}
+.animate-racket-hit { animation: racket-hit 1.6s cubic-bezier(0.6, 0, 0.4, 1) infinite; }
+
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+.animate-spin-slow { animation: spin-slow 3s linear infinite; }
+
+/* Tennis player swing — wind-up, snap-through, recover. Smooth and athletic. */
+@keyframes tennis-swing {
+  0%   { transform: rotate(-4deg) translateY(0); }
+  25%  { transform: rotate(-10deg) translateY(-2px); }   /* prepara o golpe */
+  45%  { transform: rotate(-12deg) translateY(-3px); }   /* segura no topo */
+  55%  { transform: rotate(6deg)  translateY(2px);  }    /* raquetada */
+  70%  { transform: rotate(3deg)  translateY(0);    }    /* follow-through */
+  100% { transform: rotate(-4deg) translateY(0); }       /* volta */
+}
+.animate-tennis-swing { animation: tennis-swing 3.2s cubic-bezier(0.45, 0, 0.25, 1) infinite; }
+
+/* Landing-page tennis ball — single ball launched by the swing video.
+   Stays hidden during the wind-up, appears with a quick "impact pop" at the
+   contact frame, then flies right→left across the hero passing behind the
+   headline text and exits off-screen. Timed to the 5s video loop. */
+@keyframes ball-fly {
+  0%, 52% {
+    transform: translate(880px, -30px) scale(0.4);
+    opacity: 0;
+  }
+  56% {
+    transform: translate(860px, -40px) scale(1.25);
+    opacity: 1;
+  }
+  62% {
+    transform: translate(780px, -55px) scale(1);
+    opacity: 1;
+  }
+  82% {
+    transform: translate(350px, -90px) scale(0.95);
+    opacity: 1;
+  }
+  96% {
+    transform: translate(-100px, -20px) scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-100px, -20px) scale(0.8);
+    opacity: 0;
+  }
+}
+.animate-ball-fly { animation: ball-fly 5s cubic-bezier(0.2, 0.5, 0.4, 1) infinite; }
+
+@keyframes float-in {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-float-in { animation: float-in 0.7s ease-out both; }
+
+/* Button press squish — usa filter/box-shadow para não encolher a área clicável.
+   touch-action: manipulation remove o delay de 300ms em mobile e evita
+   que o primeiro tap seja perdido em hover sticky. */
+.btn-bounce {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: filter 180ms ease, box-shadow 180ms ease;
+}
+.btn-bounce:active { filter: brightness(0.92); }
+button, a, [role="button"], input, select, textarea { touch-action: manipulation; }
+
+/* Scrollbars invisíveis até hover */
+* { scrollbar-width: none; scrollbar-color: transparent transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
+*::-webkit-scrollbar-thumb { background: transparent; border-radius: 9999px; border: 2px solid transparent; background-clip: padding-box; transition: background-color 200ms ease; }
+*::-webkit-scrollbar-track { background: transparent; }
+*:hover { scrollbar-color: color-mix(in oklab, var(--foreground) 35%, transparent) transparent; }
+*:hover::-webkit-scrollbar-thumb { background-color: color-mix(in oklab, var(--foreground) 35%, transparent); background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, var(--foreground) 55%, transparent) !important; background-clip: padding-box; }
+
