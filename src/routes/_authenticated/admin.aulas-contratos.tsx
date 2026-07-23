@@ -174,7 +174,9 @@ function ContractAdminDialog({ contract, template, plan, student, onClose }: {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) throw new Error("Sessão expirada");
       let ip: string | null = null;
-      try { const r = await fetch("https://api.ipify.org?format=json"); if (r.ok) ip = (await r.json()).ip; } catch {}
+      try { const r = await fetch("https://api.ipify.org?format=json"); if (r.ok) ip = (await r.json()).ip; } catch {
+        // IP capture is best-effort; signing should continue without it.
+      }
       const { error } = await supabase.from("contract_signatures").insert({
         contract_id: contract.id, signer_type: "admin", signer_id: u.user.id,
         document_hash: contract.document_hash, ip, user_agent: navigator.userAgent.slice(0, 500),

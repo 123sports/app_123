@@ -82,7 +82,7 @@ function useScenario() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const set = (patch: Partial<Scenario>) =>
-    navigate({ to: "/pitch", search: (prev: Scenario) => ({ ...prev, ...patch }), replace: true });
+    navigate({ to: "/pitch", search: (prev) => ({ ...prev, ...patch }), replace: true });
   return { s: search, set };
 }
 

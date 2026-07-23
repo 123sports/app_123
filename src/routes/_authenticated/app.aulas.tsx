@@ -438,7 +438,9 @@ function ViewSignDialog({ contract, template, plan, onClose }: {
       try {
         const r = await fetch("https://api.ipify.org?format=json");
         if (r.ok) ip = (await r.json()).ip;
-      } catch {}
+      } catch {
+        // IP capture is best-effort; signing should continue without it.
+      }
       const { error } = await supabase.from("contract_signatures").insert({
         contract_id: contract.id,
         signer_type: "aluno",

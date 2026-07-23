@@ -6,7 +6,11 @@ export type Audience = "aluno" | "equipe";
 const KEY = "session_audience";
 
 export function setAudience(a: Audience) {
-  try { localStorage.setItem(KEY, a); } catch {}
+  try {
+    localStorage.setItem(KEY, a);
+  } catch {
+    // Ignore storage failures in private or restricted browser contexts.
+  }
 }
 
 export function getAudience(): Audience | null {
@@ -17,5 +21,9 @@ export function getAudience(): Audience | null {
 }
 
 export function clearAudience() {
-  try { localStorage.removeItem(KEY); } catch {}
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    // Ignore storage failures in private or restricted browser contexts.
+  }
 }

@@ -64,7 +64,9 @@ function ReferralsPage() {
           text: `Aceite meu convite e venha jogar:`,
           url: shareUrl,
         });
-      } catch {}
+      } catch {
+        // Ignore native share cancellation or unsupported share targets.
+      }
     } else {
       copyLink();
     }

@@ -33,7 +33,9 @@ function InvitePage() {
   const accept = () => {
     playPop();
     // Persist code so it survives any OAuth round-trip on /auth
-    try { sessionStorage.setItem("on_tennis_ref", code.toUpperCase()); } catch {}
+    try { sessionStorage.setItem("on_tennis_ref", code.toUpperCase()); } catch {
+      // Continue even when session storage is unavailable.
+    }
     navigate({ to: "/auth", search: { ref: code.toUpperCase() } as any });
   };
 
