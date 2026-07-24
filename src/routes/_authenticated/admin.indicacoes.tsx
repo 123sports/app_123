@@ -4,6 +4,7 @@ import { Loader2, Plus, Trash2, Save, Trophy, Users, Gift } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
+import { PageHeader } from "@/components/PageHeader";
 
 export const Route = createFileRoute("/_authenticated/admin/indicacoes")({
   component: AdminReferrals,
@@ -72,7 +73,7 @@ function AdminReferrals() {
     ];
     const { error } = await (supabase as any).from("site_settings").upsert(rows, { onConflict: "key" });
     setSavingWelcome(false);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível salvar a mensagem. Tente de novo.");
     toast.success("Mensagem de boas-vindas salva");
   };
 
@@ -89,7 +90,7 @@ function AdminReferrals() {
       label: draft.label.trim(),
     });
     setSaving(false);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível adicionar o nível. Tente de novo.");
     setDraft({ min_referrals: "", discount_percent: "", label: "" });
     toast.success("Nível adicionado");
     load();
@@ -97,7 +98,7 @@ function AdminReferrals() {
 
   const updateRule = async (id: string, patch: Partial<Reward>) => {
     const { error } = await (supabase as any).from("referral_rewards").update(patch).eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível atualizar o nível. Tente de novo.");
     load();
   };
 
@@ -105,7 +106,7 @@ function AdminReferrals() {
     playPop();
     if (!confirm("Remover este nível?")) return;
     const { error } = await (supabase as any).from("referral_rewards").delete().eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível remover o nível. Tente de novo.");
     toast.success("Removido");
     load();
   };
@@ -115,21 +116,18 @@ function AdminReferrals() {
   }
 
   return (
-    <div className="space-y-8">
-      <header>
-        <h1 className="flex items-center gap-2 text-2xl font-bold">
-          <Gift className="h-6 w-6 text-primary" /> Indicações
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Configure os níveis de desconto e acompanhe quem mais indica.
-        </p>
-      </header>
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="Admin · Indicações"
+        title="Indicações"
+        subtitle="Configure os níveis de desconto e acompanhe quem mais indica."
+      />
 
-      <section className="rounded-3xl border border-border bg-card p-6 shadow-soft">
-        <h2 className="mb-1 flex items-center gap-2 font-semibold">
+      <section className="plane">
+        <h2 className="type-h3 mb-1 flex items-center gap-2">
           <Gift className="h-4 w-4 text-primary" /> Boas-vindas ao indicado
         </h2>
-        <p className="mb-4 text-xs text-muted-foreground">
+        <p className="type-small mb-4 text-muted-foreground">
           Esta mensagem aparece na página de convite (<code>/convite/CÓDIGO</code>) que o aluno compartilha.
         </p>
         <div className="space-y-3">
@@ -165,16 +163,16 @@ function AdminReferrals() {
 
 
 
-      <section className="rounded-3xl border border-border bg-card p-6 shadow-soft">
-        <h2 className="mb-1 flex items-center gap-2 font-semibold">
+      <section className="plane">
+        <h2 className="type-h3 mb-1 flex items-center gap-2">
           <Trophy className="h-4 w-4 text-primary" /> Níveis de recompensa
         </h2>
-        <p className="mb-4 text-xs text-muted-foreground">
+        <p className="type-small mb-4 text-muted-foreground">
           Defina escadas de desconto pra quem indica amigos. Exemplo: <b>Bronze · 3 amigos · 5% off</b>.
         </p>
 
         {rewards.length > 0 && (
-          <div className="mb-2 hidden grid-cols-[1fr_1fr_2fr_auto_auto] gap-3 px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid">
+          <div className="mb-2 hidden grid-cols-[1fr_1fr_2fr_auto_auto] gap-3 px-3 type-eyebrow text-muted-foreground sm:grid">
             <span>Amigos indicados</span>
             <span>Desconto (%)</span>
             <span>Nome do nível</span>
@@ -188,12 +186,12 @@ function AdminReferrals() {
           ))}
         </div>
 
-        <p className="mt-6 mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="mt-6 mb-2 type-eyebrow text-muted-foreground">
           Adicionar novo nível
         </p>
-        <div className="grid gap-3 rounded-2xl border border-dashed border-border p-4 sm:grid-cols-[1fr_1fr_2fr_auto]">
+        <div className="grid gap-4 rounded-2xl border border-dashed border-border p-4 sm:grid-cols-[1fr_1fr_2fr_auto]">
           <label className="block">
-            <span className="mb-1 block text-[11px] font-medium text-muted-foreground">Amigos indicados (mín.)</span>
+            <span className="mb-1 block type-micro text-muted-foreground">Amigos indicados (mín.)</span>
             <input
               type="number" min={1} placeholder="Ex.: 3"
               value={draft.min_referrals}
@@ -202,7 +200,7 @@ function AdminReferrals() {
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-[11px] font-medium text-muted-foreground">Desconto (%)</span>
+            <span className="mb-1 block type-micro text-muted-foreground">Desconto (%)</span>
             <input
               type="number" min={1} max={100} placeholder="Ex.: 10"
               value={draft.discount_percent}
@@ -211,7 +209,7 @@ function AdminReferrals() {
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-[11px] font-medium text-muted-foreground">Nome do nível</span>
+            <span className="mb-1 block type-micro text-muted-foreground">Nome do nível</span>
             <input
               placeholder="Ex.: Bronze, Prata, Ouro"
               value={draft.label}
@@ -231,12 +229,12 @@ function AdminReferrals() {
       </section>
 
 
-      <section className="rounded-3xl border border-border bg-card p-6 shadow-soft">
-        <h2 className="mb-4 flex items-center gap-2 font-semibold">
+      <section className="plane">
+        <h2 className="type-h3 mb-4 flex items-center gap-2">
           <Users className="h-4 w-4 text-primary" /> Ranking de indicadores
         </h2>
         {ranking.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-xl border border-dashed border-border p-6 text-center type-small text-muted-foreground">
             Ninguém indicou ninguém ainda.
           </p>
         ) : (
@@ -244,15 +242,15 @@ function AdminReferrals() {
             {ranking.map((p, i) => (
               <li key={p.id} className="flex items-center justify-between px-4 py-3 text-sm">
                 <div className="flex items-center gap-3">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/15 type-data text-xs font-bold text-primary">
                     {i + 1}
                   </span>
                   <div>
-                    <div className="font-medium">{p.full_name ?? "Aluno"}</div>
-                    <div className="text-xs text-muted-foreground">Código: {p.referral_code}</div>
+                    <div className="font-medium text-foreground">{p.full_name ?? "Aluno"}</div>
+                    <div className="type-micro text-muted-foreground">Código: {p.referral_code}</div>
                   </div>
                 </div>
-                <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-semibold text-primary">
+                <span className="rounded-full bg-primary/15 px-3 py-1 type-data text-xs font-semibold text-primary">
                   {p.total} {p.total === 1 ? "indicação" : "indicações"}
                 </span>
               </li>

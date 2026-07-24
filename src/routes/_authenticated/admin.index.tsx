@@ -1,13 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
-  CalendarCheck, DollarSign, Users, AlertCircle, Cake, TrendingUp,
+  CalendarCheck, DollarSign, Users, AlertCircle, Cake, TrendingUp, CreditCard, Wallet, Banknote,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { brl } from "@/lib/money";
-import {
-  format, startOfMonth, endOfMonth, startOfDay, addDays,
-} from "date-fns";
+import { PageHeader } from "@/components/PageHeader";
+import { PersonList, PersonRow } from "@/components/PersonList";
+import { format, startOfMonth, endOfMonth, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
@@ -83,96 +83,127 @@ function AdminDashboard() {
   const result = revenue - costsMonthCents;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Painel administrativo</h1>
-        <p className="text-muted-foreground">
-          {format(today, "MMMM 'de' yyyy", { locale: ptBR })}
-        </p>
-      </div>
+    <>
+      <PageHeader
+        eyebrow="Admin · Painel"
+        title="Painel administrativo"
+        subtitle={format(today, "MMMM 'de' yyyy", { locale: ptBR })}
+      />
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Link to="/admin/reservas"><Stat icon={CalendarCheck} label="Reservas no mês" value={bookingsMonth.length} hint="Ver todas →" /></Link>
-        <Link to="/admin/financeiro" search={{ tab: "receitas" } as any}><Stat icon={DollarSign} label="Receita do mês" value={brl(revenue)} hint="Detalhar →" /></Link>
-        <Link to="/admin/financeiro" search={{ tab: "visao" } as any}><Stat icon={TrendingUp} label="Resultado" value={brl(result)} accent={result >= 0 ? "good" : "bad"} hint="Ver saúde →" /></Link>
-        <Link to="/admin/alunos"><Stat icon={Users} label="Alunos" value={students} hint="Ver lista →" /></Link>
-      </section>
+      {/* Blocos padronizados: mesma dimensão, mesmo espaçamento em todos os lados */}
+      <div className="stack-app">
+        <section className="grid auto-rows-fr grid-cols-2 gap-4 lg:grid-cols-4">
+          <Stat to="/admin/reservas" icon={CalendarCheck} label="Reservas no mês" value={bookingsMonth.length} hint="Ver todas" />
+          <Stat to="/admin/financeiro" search={{ tab: "receitas" }} icon={DollarSign} label="Receita do mês" value={brl(revenue)} hint="Detalhar" />
+          <Stat to="/admin/financeiro" search={{ tab: "visao" }} icon={TrendingUp} label="Resultado" value={brl(result)} accent={result >= 0 ? "good" : "bad"} hint="Ver saúde" />
+          <Stat to="/admin/alunos" icon={Users} label="Alunos" value={students} hint="Ver lista" />
+          <Stat to="/admin/financeiro" search={{ tab: "receitas" }} icon={Banknote} label="Dinheiro" value={brl(cash)} />
+          <Stat to="/admin/financeiro" search={{ tab: "receitas" }} icon={CreditCard} label="Cartão" value={brl(card)} />
+          <Stat to="/admin/financeiro" search={{ tab: "custos" }} icon={Wallet} label="Custos do mês" value={brl(costsMonthCents)} accent="bad" hint="Gerenciar" />
+        </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
-        <Link to="/admin/financeiro" search={{ tab: "receitas" } as any}><Stat icon={DollarSign} label="Dinheiro" value={brl(cash)} small /></Link>
-        <Link to="/admin/financeiro" search={{ tab: "receitas" } as any}><Stat icon={DollarSign} label="Cartão" value={brl(card)} small /></Link>
-        <Link to="/admin/financeiro" search={{ tab: "custos" } as any}><Stat icon={DollarSign} label="Custos do mês" value={brl(costsMonthCents)} small accent="bad" hint="Gerenciar →" /></Link>
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-semibold flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-primary" /> Pagamentos pendentes
-            </h2>
-            <Link to="/admin/reservas" className="text-xs text-primary hover:underline">Ver todas</Link>
+        <section className="grid gap-4 lg:grid-cols-2">
+          <div className="plane">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="type-h3 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-foreground" /> Pagamentos pendentes
+              </h2>
+              <Link to="/admin/reservas" className="type-small font-bold hover:underline">Ver todas</Link>
+            </div>
+            {pending.length === 0 ? (
+              <p className="py-6 text-center type-small text-muted-foreground">Nenhum pagamento pendente.</p>
+            ) : (
+              <ul className="flex flex-col">
+                {pending.map((b) => (
+                  <li
+                    key={b.id}
+                    className="border-t border-border first:border-t-0 [&:has(a:hover)]:border-transparent [&:has(a:hover)+li]:border-transparent"
+                  >
+                    <Link
+                      to="/admin/aluno/$id"
+                      params={{ id: b.user_id }}
+                      className="group -mx-5 flex items-center justify-between px-5 py-3 transition-colors hover:bg-accent"
+                    >
+                      <span>
+                        <span className="block type-small font-bold">
+                          {format(new Date(b.booking_date + "T00:00:00"), "dd/MM")} · {String(b.start_hour).padStart(2, "0")}:00
+                        </span>
+                        <span className="block type-micro text-muted-foreground">{b.type.replace("_", " ")}</span>
+                      </span>
+                      <span className="flex items-center whitespace-nowrap type-small font-bold opacity-40 transition-opacity duration-300 ease-[cubic-bezier(.625,.05,0,1)] group-hover:opacity-100">
+                        abrir aluno
+                        <span className="inline-block w-0 overflow-hidden opacity-0 transition-all duration-300 ease-[cubic-bezier(.625,.05,0,1)] group-hover:ml-1 group-hover:w-4 group-hover:opacity-100">→</span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-          {pending.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">Nenhum pagamento pendente.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {pending.map((b) => (
-                <li key={b.id} className="flex items-center justify-between rounded-lg bg-background/60 px-3 py-2">
-                  <div>
-                    <div className="font-medium">
-                      {format(new Date(b.booking_date + "T00:00:00"), "dd/MM")} · {String(b.start_hour).padStart(2, "0")}:00
-                    </div>
-                    <div className="text-xs text-muted-foreground">{b.type.replace("_", " ")}</div>
-                  </div>
-                  <Link to="/admin/aluno/$id" params={{ id: b.user_id }} className="text-xs text-primary hover:underline">
-                    abrir aluno
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
 
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-          <h2 className="mb-4 flex items-center gap-2 font-semibold">
-            <Cake className="h-4 w-4 text-primary" /> Aniversariantes (15 dias)
-          </h2>
-          {birthdays.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">Ninguém por enquanto.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {birthdays.map((b) => (
-                <li key={b.id} className="flex items-center justify-between">
-                  <Link to="/admin/aluno/$id" params={{ id: b.id }} className="hover:underline">
-                    {b.full_name ?? "Aluno"}
-                  </Link>
-                  <span className="text-xs text-muted-foreground">
-                    {b.birth_date ? format(new Date(b.birth_date + "T00:00:00"), "dd/MM") : "—"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-    </div>
+          <div className="plane">
+            <h2 className="type-h3 mb-4 flex items-center gap-2">
+              <Cake className="h-4 w-4 text-foreground" /> Aniversariantes (15 dias)
+            </h2>
+            {birthdays.length === 0 ? (
+              <p className="py-4 text-center type-small text-muted-foreground">Ninguém por enquanto.</p>
+            ) : (
+              <PersonList>
+                {birthdays.map((b) => (
+                  <PersonRow
+                    key={b.id}
+                    to="/admin/aluno/$id"
+                    params={{ id: b.id }}
+                    name={b.full_name ?? "Aluno"}
+                    trailing={
+                      <span className="type-data text-muted-foreground">
+                        {b.birth_date ? format(new Date(b.birth_date + "T00:00:00"), "dd/MM") : "—"}
+                      </span>
+                    }
+                  />
+                ))}
+              </PersonList>
+            )}
+          </div>
+        </section>
+      </div>
+    </>
   );
 }
 
 function Stat({
-  icon: Icon, label, value, accent, small, hint,
-}: { icon: any; label: string; value: any; accent?: "good" | "bad"; small?: boolean; hint?: string }) {
-  const c = accent === "good" ? "text-primary" : accent === "bad" ? "text-destructive" : "";
+  to, search, icon: Icon, label, value, accent, hint,
+}: {
+  to: string;
+  search?: Record<string, string>;
+  icon: any;
+  label: string;
+  value: any;
+  accent?: "good" | "bad";
+  hint?: string;
+}) {
+  const valueColor = accent === "bad" ? "text-destructive" : "text-foreground";
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-soft transition hover:border-primary/40 hover:shadow-md">
+    <Link
+      to={to}
+      search={search as any}
+      className="group btn-bounce flex h-full flex-col bg-card/30 p-5 transition-colors duration-300 ease-[cubic-bezier(.625,.05,0,1)] hover:bg-card"
+    >
       <div className="flex items-center justify-between">
-        <div className="text-xs text-muted-foreground">{label}</div>
-        <Icon className="h-4 w-4 text-primary" />
+        <span className="type-eyebrow">{label}</span>
+        <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
-      <div className={`mt-2 font-bold ${small ? "text-xl" : "text-2xl"} ${c}`}>{value}</div>
-      {hint && <div className="mt-1 text-[11px] text-primary/70">{hint}</div>}
-    </div>
+      <div className="mt-4 flex items-baseline justify-between gap-3">
+        <span className={`type-data text-3xl ${valueColor}`}>{value}</span>
+        {hint ? (
+          <span className="flex items-center whitespace-nowrap type-micro text-muted-foreground">
+            {hint}
+            <span className="inline-block w-0 overflow-hidden opacity-0 transition-all duration-300 ease-[cubic-bezier(.625,.05,0,1)] group-hover:ml-1 group-hover:w-4 group-hover:opacity-100">
+              →
+            </span>
+          </span>
+        ) : null}
+      </div>
+    </Link>
   );
 }
-
-const _ = startOfDay; // keep import used

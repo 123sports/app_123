@@ -4,6 +4,7 @@ import { Camera, Loader2, Image as ImageIcon, Trophy, Target, GraduationCap, Spa
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
+import { PageHeader } from "@/components/PageHeader";
 
 export const Route = createFileRoute("/_authenticated/app/perfil")({
   component: Perfil,
@@ -110,7 +111,7 @@ function Perfil() {
       if (upErr) throw upErr;
       toast.success("Foto atualizada");
     } catch (e: any) {
-      toast.error(e.message ?? "Erro no upload");
+      toast.error(e?.message ?? "Não foi possível enviar a foto. Tente de novo.");
     } finally {
       setUploading(false);
     }
@@ -132,7 +133,7 @@ function Perfil() {
       if (error) throw error;
       toast.success("Perfil salvo!");
     } catch (e: any) {
-      toast.error(e.message ?? "Erro ao salvar");
+      toast.error(e?.message ?? "Não foi possível salvar o perfil. Tente de novo.");
     } finally {
       setSaving(false);
     }
@@ -141,15 +142,16 @@ function Perfil() {
   const set = (k: keyof Profile, v: any) => setP((s) => ({ ...s, [k]: v }));
 
   return (
-    <div className="animate-float-in space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Meu perfil</h1>
-        <p className="text-muted-foreground">Mantenha seus dados atualizados — eles ajudam em emergências.</p>
-      </div>
+    <div className="animate-float-in space-y-4">
+      <PageHeader
+        eyebrow="Minha conta"
+        title="Meu perfil"
+        subtitle="Mantenha seus dados atualizados — eles ajudam em emergências."
+      />
 
-      <form onSubmit={save} className="grid gap-6 lg:grid-cols-[280px_1fr]">
+      <form onSubmit={save} className="grid gap-4 lg:grid-cols-[280px_1fr]">
         {/* Avatar */}
-        <div className="rounded-3xl border border-border bg-card p-6 text-center shadow-soft">
+        <div className="plane text-center">
           <div className="relative mx-auto h-40 w-40">
             <div className="h-full w-full overflow-hidden rounded-full border-4 border-primary bg-secondary">
               {avatarPreview ? (
@@ -164,23 +166,23 @@ function Perfil() {
               type="button"
               onClick={() => { playPop(); setPickerOpen((v) => !v); }}
               disabled={uploading}
-              className="btn-bounce absolute bottom-1 right-1 inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-glow"
+              className="btn-bounce absolute bottom-1 right-1 inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground"
             >
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
             </button>
             {pickerOpen && (
-              <div className="absolute bottom-12 right-0 z-20 flex flex-col gap-1 rounded-xl border border-border bg-popover p-2 shadow-lg">
+              <div className="absolute bottom-12 right-0 z-20 flex flex-col gap-1 rounded-xl border border-border bg-popover p-2">
                 <button
                   type="button"
                   onClick={() => { playPop(); setPickerOpen(false); cameraRef.current?.click(); }}
-                  className="btn-bounce flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-secondary"
+                  className="btn-bounce flex items-center gap-2 rounded-full px-3 py-2 text-sm hover:bg-accent"
                 >
                   <Camera className="h-4 w-4" /> Tirar foto
                 </button>
                 <button
                   type="button"
                   onClick={() => { playPop(); setPickerOpen(false); fileRef.current?.click(); }}
-                  className="btn-bounce flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-secondary"
+                  className="btn-bounce flex items-center gap-2 rounded-full px-3 py-2 text-sm hover:bg-accent"
                 >
                   <ImageIcon className="h-4 w-4" /> Escolher da galeria
                 </button>
@@ -202,12 +204,12 @@ function Perfil() {
               onChange={(e) => e.target.files?.[0] && handleAvatar(e.target.files[0])}
             />
           </div>
-          <div className="mt-4 font-semibold">{p.full_name || "—"}</div>
-          <div className="text-sm text-muted-foreground">{email}</div>
+          <div className="mt-4 type-h3">{p.full_name || "—"}</div>
+          <div className="type-small text-muted-foreground">{email}</div>
         </div>
 
         {/* Form */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           <Card title="Dados pessoais" hint="Esses dados são usados no contrato de aulas.">
             <div className="grid gap-3 md:grid-cols-2">
               <Field label="Nome completo"><Input value={p.full_name ?? ""} onChange={(v) => set("full_name", v)} /></Field>
@@ -232,12 +234,12 @@ function Perfil() {
 
 
           {/* Conquistas / gamificação */}
-          <div className="rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/10 to-card p-6 shadow-soft">
+          <div className="plane plane-hero">
             <div className="mb-4 flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-bold">Minhas conquistas</h2>
+              <h2 className="type-h3">Minhas conquistas</h2>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <StatTile icon={GraduationCap} label="Aulas feitas" value={aulasFeitas} />
               <StatTile icon={Trophy} label="Jogos ganhos" value={p.games_won} />
               <StatTile icon={Target} label="Aces" value={p.aces} />
@@ -282,7 +284,7 @@ function Perfil() {
             <button
               type="submit"
               disabled={saving}
-              className="btn-bounce rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground shadow-glow disabled:opacity-60"
+              className="btn-bounce rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground disabled:opacity-60"
             >
               {saving ? "Salvando..." : "Salvar perfil"}
             </button>
@@ -295,9 +297,9 @@ function Perfil() {
 
 function Card({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-3xl border border-border bg-card p-6 shadow-soft">
-      <h2 className="text-lg font-bold">{title}</h2>
-      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+    <div className="plane">
+      <h2 className="type-h3">{title}</h2>
+      {hint && <p className="mt-1 type-micro text-muted-foreground">{hint}</p>}
       <div className="mt-4">{children}</div>
     </div>
   );
@@ -306,7 +308,7 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
 function Field({ label, children, className = "" }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <label className={`block ${className}`}>
-      <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="mb-1 block type-micro text-muted-foreground">{label}</span>
       {children}
     </label>
   );
@@ -347,12 +349,12 @@ function Select({ value, onChange, options, placeholder }: { value: string; onCh
 
 function StatTile({ icon: Icon, label, value }: { icon: any; label: string; value: number }) {
   return (
-    <div className="rounded-2xl border border-border bg-card/60 p-4">
-      <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+    <div className="plane plane-compact h-full">
+      <div className="mb-2 flex items-center gap-2 type-micro text-muted-foreground">
         <Icon className="h-4 w-4 text-primary" />
         {label}
       </div>
-      <div className="text-2xl font-bold">{value}</div>
+      <div className="type-data text-2xl font-bold">{value}</div>
     </div>
   );
 }

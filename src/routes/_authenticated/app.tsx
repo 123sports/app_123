@@ -1,32 +1,45 @@
-import { createFileRoute, Outlet, Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Outlet, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Home, User, CalendarDays, LogOut, Menu, X, ShieldCheck, Gift, Store, Handshake, TrendingUp, Star, GraduationCap } from "lucide-react";
+import { Home, User, CalendarDays, ShieldCheck, Gift, Store, Handshake, TrendingUp, Star, GraduationCap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Logo } from "@/components/Logo";
-import { BackButton } from "@/components/BackButton";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { TermsGate } from "@/components/TermsGate";
-
+import { SidebarShell, type SideNavGroup } from "@/components/SidebarShell";
 import { playPop } from "@/lib/sfx";
 import { Toaster } from "@/components/ui/sonner";
 import { getAudience, clearAudience } from "@/lib/session-audience";
 
-function PageBack() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  if (pathname === "/app") return null;
-  return <div className="mb-4"><BackButton /></div>;
-}
-
 export const Route = createFileRoute("/_authenticated/app")({
   component: AppShell,
 });
+
+const NAV: SideNavGroup[] = [
+  {
+    label: "Quadra",
+    items: [
+      { to: "/app", label: "Início", icon: Home, exact: true },
+      { to: "/app/agenda", label: "Agenda", icon: CalendarDays },
+      { to: "/app/aulas", label: "Minhas Aulas", icon: GraduationCap },
+      { to: "/app/match-aberto", label: "Match Aberto", icon: Handshake },
+      { to: "/app/evolucao", label: "Evolução", icon: TrendingUp },
+    ],
+  },
+  {
+    label: "Mais",
+    items: [
+      { to: "/app/loja", label: "Loja", icon: Store },
+      { to: "/app/indicacoes", label: "Indique e ganhe", icon: Gift },
+      { to: "/app/feedback", label: "Avaliar prof.", icon: Star },
+      { to: "/app/perfil", label: "Perfil", icon: User },
+    ],
+  },
+];
 
 function AppShell() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -56,111 +69,29 @@ function AppShell() {
 
   return (
     <TermsGate>
-    <div className="hero-bg min-h-screen">
       <Toaster />
-      <header className="sticky top-0 z-30 border-b border-border/40 bg-gradient-to-b from-secondary/70 via-secondary/40 to-transparent backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-4">
-          <div className="flex shrink-0 items-center gap-8">
-            <button
-              className="btn-bounce rounded-full p-2 md:hidden"
-              onClick={() => { playPop(); setOpen(!open); }}
-              aria-label="Menu"
-            >
-              {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
-            <Logo className="h-28 sm:h-32 md:h-28 lg:h-32" />
-          </div>
-
-          <nav className="ml-8 hidden items-center gap-2 md:flex">
-            <NavLink to="/app" icon={Home} label="Início" />
-            <NavLink to="/app/agenda" icon={CalendarDays} label="Agenda" />
-            <NavLink to="/app/aulas" icon={GraduationCap} label="Minhas Aulas" />
-            <NavLink to="/app/evolucao" icon={TrendingUp} label="Evolução" />
-            <NavLink to="/app/match-aberto" icon={Handshake} label="Match Aberto" />
-            <NavLink to="/app/indicacoes" icon={Gift} label="Indique e ganhe" />
-            <NavLink to="/app/loja" icon={Store} label="Loja" />
-            <NavLink to="/app/feedback" icon={Star} label="Avaliar prof." />
-            <NavLink to="/app/perfil" icon={User} label="Perfil" />
-            {isAdmin && (
-              <Link to="/admin" onClick={() => playPop()}
-                className="btn-bounce flex items-center gap-2 rounded-full border border-primary bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20">
+      <SidebarShell
+        groups={NAV}
+        user={{ name, avatarUrl: avatar }}
+        onLogout={handleLogout}
+        homeTo="/app"
+        headerRight={
+          <>
+            <NotificationsBell />
+            {isAdmin ? (
+              <Link
+                to="/admin"
+                onClick={() => playPop()}
+                className="btn-bounce flex items-center gap-2 rounded-full border border-primary px-4 py-2 text-sm font-bold text-foreground hover:bg-accent"
+              >
                 <ShieldCheck className="h-4 w-4" /> Admin
               </Link>
-            )}
-          </nav>
-          <div className="flex items-center gap-3">
-            <div className="md:hidden"><NotificationsBell /></div>
-            <div className="hidden items-center gap-2 md:flex">
-              <NotificationsBell />
-              <Avatar url={avatar} name={name} />
-              <button
-                onClick={handleLogout}
-                className="btn-bounce inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-sm hover:bg-secondary"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-        {open && (
-          <div className="border-t border-border bg-background md:hidden">
-            <nav className="flex flex-col gap-1 p-3">
-              <NavLink to="/app" icon={Home} label="Início" onClick={() => setOpen(false)} />
-              <NavLink to="/app/agenda" icon={CalendarDays} label="Agenda" onClick={() => setOpen(false)} />
-              <NavLink to="/app/aulas" icon={GraduationCap} label="Minhas Aulas" onClick={() => setOpen(false)} />
-              <NavLink to="/app/evolucao" icon={TrendingUp} label="Evolução" onClick={() => setOpen(false)} />
-              <NavLink to="/app/match-aberto" icon={Handshake} label="Match Aberto" onClick={() => setOpen(false)} />
-              <NavLink to="/app/indicacoes" icon={Gift} label="Indique e ganhe" onClick={() => setOpen(false)} />
-              <NavLink to="/app/loja" icon={Store} label="Loja" onClick={() => setOpen(false)} />
-              <NavLink to="/app/feedback" icon={Star} label="Avaliar prof." onClick={() => setOpen(false)} />
-              <NavLink to="/app/perfil" icon={User} label="Perfil" onClick={() => setOpen(false)} />
-              {isAdmin && (
-                <Link to="/admin" onClick={() => { playPop(); setOpen(false); }}
-                  className="btn-bounce flex items-center gap-2 rounded-xl border border-primary bg-primary/10 px-4 py-2 text-sm font-medium text-primary">
-                  <ShieldCheck className="h-4 w-4" /> Admin
-                </Link>
-              )}
-              <button
-                onClick={handleLogout}
-                className="btn-bounce mt-2 inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm"
-              >
-                <LogOut className="h-4 w-4" /> Sair
-              </button>
-            </nav>
-          </div>
-        )}
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <PageBack />
+            ) : null}
+          </>
+        }
+      >
         <Outlet />
-      </main>
-    </div>
+      </SidebarShell>
     </TermsGate>
-  );
-}
-
-function NavLink({
-  to, icon: Icon, label, onClick,
-}: { to: string; icon: any; label: string; onClick?: () => void }) {
-  return (
-    <Link
-      to={to}
-      onClick={() => { playPop(); onClick?.(); }}
-      activeOptions={{ exact: to === "/app" }}
-      activeProps={{ className: "bg-primary text-primary-foreground" }}
-      inactiveProps={{ className: "text-foreground hover:bg-secondary" }}
-      className="btn-bounce flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium"
-    >
-      <Icon className="h-4 w-4" /> {label}
-    </Link>
-  );
-}
-
-function Avatar({ url, name }: { url: string | null; name: string }) {
-  const initials = (name || "?").split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
-  return (
-    <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-border bg-primary text-sm font-bold text-primary-foreground">
-      {url ? <img src={url} alt={name} className="h-full w-full object-cover" /> : initials}
-    </div>
   );
 }

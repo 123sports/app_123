@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { brl, cents as toCents } from "@/lib/money";
 import { computeDocumentHash, renderTemplate, statusLabel, readContractSnapshot, type ContractSnapshot } from "@/lib/contracts";
 import { ContractView } from "@/components/ContractView";
+import { PageHeader } from "@/components/PageHeader";
 
 export const Route = createFileRoute("/_authenticated/admin/aulas-contratos")({
   component: AdminAulasContratos,
@@ -80,11 +81,12 @@ function AdminAulasContratos() {
   }, [contracts, filter]);
 
   return (
-    <div className="space-y-6 animate-float-in">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Contratos de Aulas</h1>
-        <p className="text-muted-foreground">Gerencie propostas, assinaturas e contratos vigentes.</p>
-      </div>
+    <div className="space-y-4 animate-float-in">
+      <PageHeader
+        eyebrow="Admin · Contratos"
+        title="Contratos de Aulas"
+        subtitle="Gerencie propostas, assinaturas e contratos vigentes."
+      />
 
       <div className="flex flex-wrap gap-2">
         {FILTERS.map((f) => (
@@ -98,13 +100,13 @@ function AdminAulasContratos() {
         ))}
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-4 auto-rows-fr md:grid-cols-2">
         {filtered.length === 0 && <p className="text-muted-foreground">Nenhum contrato neste filtro.</p>}
         {filtered.map((c) => {
           const plan = plans.find((p) => p.id === c.plan_id);
           const s = statusLabel(c.status);
           return (
-            <Card key={c.id}>
+            <Card key={c.id} className="h-full">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -118,7 +120,7 @@ function AdminAulasContratos() {
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <div>
-                  Valor: <strong>{brl(c.agreed_price_cents)}</strong>
+                  Valor: <strong className="type-data">{brl(c.agreed_price_cents)}</strong>
                   {c.agreed_price_cents !== c.list_price_cents && (
                     <span className="ml-2 text-muted-foreground">(tabela {brl(c.list_price_cents)})</span>
                   )}
@@ -184,19 +186,19 @@ function ContractAdminDialog({ contract, template, plan, student, onClose }: {
       if (error) throw error;
       toast.success("Contrato assinado pelo admin.");
       onClose(true);
-    } catch (e: any) { toast.error(e.message); } finally { setSubmitting(false); }
+    } catch (e: any) { toast.error(e?.message ?? "Não foi possível assinar o contrato. Tente de novo."); } finally { setSubmitting(false); }
   };
 
   const refuse = async () => {
     if (!confirm("Recusar este contrato?")) return;
     const { error } = await supabase.from("class_contracts").update({ status: "recusado" as any }).eq("id", contract.id);
-    if (error) toast.error(error.message); else { toast.success("Contrato recusado"); onClose(true); }
+    if (error) toast.error(error?.message ?? "Não foi possível recusar o contrato. Tente de novo."); else { toast.success("Contrato recusado"); onClose(true); }
   };
 
   const close = async () => {
     if (!confirm("Encerrar este contrato vigente?")) return;
     const { error } = await supabase.from("class_contracts").update({ status: "encerrado" as any }).eq("id", contract.id);
-    if (error) toast.error(error.message); else { toast.success("Contrato encerrado"); onClose(true); }
+    if (error) toast.error(error?.message ?? "Não foi possível encerrar o contrato. Tente de novo."); else { toast.success("Contrato encerrado"); onClose(true); }
   };
 
   const sendCounter = async () => {
@@ -222,7 +224,7 @@ function ContractAdminDialog({ contract, template, plan, student, onClose }: {
       } as any);
       toast.success("Contraproposta enviada ao aluno.");
       onClose(true);
-    } catch (e: any) { toast.error(e.message); } finally { setSubmitting(false); }
+    } catch (e: any) { toast.error(e?.message ?? "Não foi possível enviar a contraproposta. Tente de novo."); } finally { setSubmitting(false); }
   };
 
   return (
@@ -233,7 +235,7 @@ function ContractAdminDialog({ contract, template, plan, student, onClose }: {
         </DialogHeader>
 
         <div className="grid gap-4 md:grid-cols-[1fr_320px]">
-          <div className="rounded-lg border border-border bg-card p-4 max-h-[60vh] overflow-y-auto">
+          <div className="plane max-h-[60vh] overflow-y-auto">
             {body ? <ContractView markdown={body} /> : <p className="text-muted-foreground">Modelo de contrato não encontrado.</p>}
           </div>
 
@@ -251,7 +253,7 @@ function ContractAdminDialog({ contract, template, plan, student, onClose }: {
             </Card>
 
             {canSign && (
-              <div className="space-y-2 rounded-md border border-border p-3">
+              <div className="space-y-2 border border-border p-3">
                 <div className="flex items-start gap-2">
                   <Checkbox id="a2" checked={agree} onCheckedChange={(v) => setAgree(!!v)} />
                   <Label htmlFor="a2" className="text-sm font-normal leading-snug cursor-pointer">

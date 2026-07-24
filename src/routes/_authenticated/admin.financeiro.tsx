@@ -8,6 +8,8 @@ import { format, startOfMonth, endOfMonth, addMonths, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { z } from "zod";
 import { zodValidator, fallback } from "@tanstack/zod-adapter";
+import { PageHeader } from "@/components/PageHeader";
+import { ViewTabs } from "@/components/ViewTabs";
 
 const searchSchema = z.object({
   tab: fallback(z.enum(["visao", "receitas", "custos"]), "visao").default("visao"),
@@ -69,7 +71,7 @@ function AdminFinanceiro() {
 
   const savePrice = async (id: string, price_cents: number) => {
     const { error } = await supabase.from("pricing").update({ price_cents }).eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível atualizar o preço. Tente de novo.");
     toast.success("Preço atualizado");
   };
 
@@ -82,7 +84,7 @@ function AdminFinanceiro() {
       recurrence: newCost.recurrence,
       incurred_on: format(monthDate, "yyyy-MM-dd"),
     });
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível adicionar o custo. Tente de novo.");
     setNewCost({ description: "", category: "", amount: "", recurrence: "mensal" });
     toast.success("Custo adicionado");
     load();
@@ -90,7 +92,7 @@ function AdminFinanceiro() {
 
   const delCost = async (id: string) => {
     const { error } = await supabase.from("costs").delete().eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível excluir o custo. Tente de novo.");
     setCosts((c) => c.filter((x) => x.id !== id));
   };
 
@@ -143,49 +145,46 @@ function AdminFinanceiro() {
   const shiftMonth = (delta: number) => navigate({ search: (p: any) => ({ ...p, ym: format(addMonths(monthDate, delta), "yyyy-MM") }) });
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold">Financeiro</h1>
-          <p className="text-muted-foreground">Acompanhe a saúde da sua quadra mês a mês.</p>
-        </div>
-        <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-2 py-1.5 shadow-soft">
-          <button onClick={() => shiftMonth(-1)} className="btn-bounce rounded p-1 hover:bg-muted"><ChevronLeft className="h-4 w-4" /></button>
-          <div className="min-w-[150px] text-center text-sm font-semibold capitalize">
-            {format(monthDate, "MMMM 'de' yyyy", { locale: ptBR })}
+    <div className="stack-app">
+      <PageHeader
+        eyebrow="Admin · Financeiro"
+        title="Financeiro"
+        subtitle="Acompanhe a saúde da sua quadra mês a mês."
+        actions={
+          <div className="flex items-center gap-2 rounded-full border border-border bg-card px-2 py-1.5">
+            <button onClick={() => shiftMonth(-1)} className="btn-bounce rounded-full p-1 hover:bg-accent"><ChevronLeft className="h-4 w-4" /></button>
+            <div className="min-w-[150px] text-center type-data text-sm capitalize">
+              {format(monthDate, "MMMM 'de' yyyy", { locale: ptBR })}
+            </div>
+            <button onClick={() => shiftMonth(1)} className="btn-bounce rounded-full p-1 hover:bg-accent"><ChevronRight className="h-4 w-4" /></button>
           </div>
-          <button onClick={() => shiftMonth(1)} className="btn-bounce rounded p-1 hover:bg-muted"><ChevronRight className="h-4 w-4" /></button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Abas */}
-      <div className="flex gap-2 border-b border-border">
-        {[
-          { k: "visao", label: "Visão geral" },
-          { k: "receitas", label: "Receitas" },
-          { k: "custos", label: "Custos" },
-        ].map((t) => (
-          <button key={t.k} onClick={() => goTab(t.k as any)}
-            className={`relative px-4 py-2 text-sm font-medium transition ${tab === t.k ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-            {t.label}
-            {tab === t.k && <span className="absolute -bottom-px left-0 right-0 h-0.5 bg-primary" />}
-          </button>
-        ))}
-      </div>
+      <ViewTabs
+        tabs={[
+          { key: "visao", label: "Visão geral" },
+          { key: "receitas", label: "Receitas" },
+          { key: "custos", label: "Custos" },
+        ]}
+        value={tab}
+        onChange={goTab}
+      />
 
       {/* ============ VISÃO ============ */}
       {tab === "visao" && (
-        <div className="space-y-6">
-          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="stack-app">
+          <section className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Kpi icon={Wallet} label="Receita" value={brl(revenue)} sub={`${paid.length} reservas pagas`} />
             <Kpi icon={TrendingDown} label="Custos" value={brl(totalCost)} accent="bad" sub={`${brl(fixedMonth)} fixos · ${brl(oneOffMonth)} avulsos`} />
             <Kpi icon={TrendingUp} label="Resultado" value={brl(result)} accent={result >= 0 ? "good" : "bad"} sub={`Margem ${margin}%`} />
             <Kpi icon={Activity} label="Saúde" value={<span className={health.color}>{health.label}</span>} sub={health.tip} />
           </section>
 
-          <section className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-              <h3 className="mb-3 text-sm font-semibold">Ponto de equilíbrio</h3>
+          <section className="grid auto-rows-fr gap-4 md:grid-cols-2">
+            <div className="plane h-full">
+              <h3 className="mb-3 type-h3">Ponto de equilíbrio</h3>
               <div className="mb-2 flex items-baseline justify-between text-sm">
                 <span className="text-muted-foreground">Receita / Custos</span>
                 <span className="font-semibold">{brl(revenue)} / {brl(breakeven)}</span>
@@ -200,24 +199,24 @@ function AdminFinanceiro() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-              <h3 className="mb-3 text-sm font-semibold">Recebimentos por forma</h3>
+            <div className="plane h-full">
+              <h3 className="mb-3 type-h3">Recebimentos por forma</h3>
               <div className="space-y-2 text-sm">
                 <Bar label="Dinheiro" value={cash} total={revenue} />
                 <Bar label="Pix" value={pix} total={revenue} />
                 <Bar label="Cartão" value={card} total={revenue} />
               </div>
-              <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                <span>Ticket médio</span><span className="font-semibold text-foreground">{brl(ticket)}</span>
+              <div className="mt-3 flex items-center justify-between type-small text-muted-foreground">
+                <span>Ticket médio</span><span className="type-data font-semibold text-foreground">{brl(ticket)}</span>
               </div>
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>A receber (pendente)</span><span className="font-semibold text-foreground">{brl(aReceber)}</span>
+              <div className="flex items-center justify-between type-small text-muted-foreground">
+                <span>A receber (pendente)</span><span className="type-data font-semibold text-foreground">{brl(aReceber)}</span>
               </div>
             </div>
           </section>
 
-          <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-            <h3 className="mb-3 text-sm font-semibold">Receita por tipo de reserva</h3>
+          <section className="plane">
+            <h3 className="mb-3 type-h3">Receita por tipo de reserva</h3>
             {byTypeArr.length === 0 ? (
               <p className="py-4 text-center text-sm text-muted-foreground">Nenhuma receita registrada neste mês.</p>
             ) : (
@@ -233,15 +232,15 @@ function AdminFinanceiro() {
 
       {/* ============ RECEITAS ============ */}
       {tab === "receitas" && (
-        <div className="space-y-4">
-          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="stack-app">
+          <section className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Kpi small label="Recebido" value={brl(revenue)} />
             <Kpi small label="A receber" value={brl(aReceber)} accent="bad" />
             <Kpi small label="Dinheiro" value={brl(cash)} />
             <Kpi small label="Cartão + Pix" value={brl(card + pix)} />
           </section>
 
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 text-sm shadow-soft">
+          <div className="plane plane-compact flex flex-wrap items-center gap-2 text-sm">
             <Filter className="h-4 w-4 text-muted-foreground" />
             <select value={fStatus} onChange={(e) => setFStatus(e.target.value as any)} className="rounded-md border border-input bg-background px-2 py-1">
               <option value="all">Pagos + pendentes</option>
@@ -267,9 +266,9 @@ function AdminFinanceiro() {
             <div className="ml-auto text-xs text-muted-foreground">{filteredPaid.length} reserva(s)</div>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
+          <div className="overflow-x-auto bg-card/30">
             <table className="w-full text-sm">
-              <thead className="border-b border-border bg-background/40 text-left text-xs uppercase text-muted-foreground">
+              <thead className="border-b border-border bg-secondary text-left type-eyebrow text-muted-foreground">
                 <tr>
                   <th className="p-3">Data</th>
                   <th className="p-3">Aluno</th>
@@ -282,10 +281,10 @@ function AdminFinanceiro() {
               </thead>
               <tbody>
                 {filteredPaid.map((b) => (
-                  <tr key={b.id} className="border-b border-border/60 hover:bg-background/40">
+                  <tr key={b.id} className="border-b border-border/60 hover:bg-secondary">
                     <td className="p-3 whitespace-nowrap">
-                      <div className="font-medium">{format(new Date(b.booking_date + "T00:00:00"), "dd/MM")}</div>
-                      <div className="text-xs text-muted-foreground">{String(b.start_hour).padStart(2, "0")}:00</div>
+                      <div className="type-data font-medium">{format(new Date(b.booking_date + "T00:00:00"), "dd/MM")}</div>
+                      <div className="type-micro text-muted-foreground">{String(b.start_hour).padStart(2, "0")}:00</div>
                     </td>
                     <td className="p-3">{profiles[b.user_id]?.full_name ?? "—"}</td>
                     <td className="p-3 text-xs">{TYPE_LABEL[b.type] ?? b.type}</td>
@@ -296,7 +295,7 @@ function AdminFinanceiro() {
                         {b.payment_status}
                       </span>
                     </td>
-                    <td className="p-3 text-right font-semibold">{brl(b.amount_cents ?? 0)}</td>
+                    <td className="p-3 text-right type-data font-semibold">{brl(b.amount_cents ?? 0)}</td>
                   </tr>
                 ))}
                 {filteredPaid.length === 0 && (
@@ -304,10 +303,10 @@ function AdminFinanceiro() {
                 )}
               </tbody>
               {filteredPaid.length > 0 && (
-                <tfoot className="border-t-2 border-border bg-background/40">
+                <tfoot className="border-t-2 border-border bg-secondary">
                   <tr>
-                    <td colSpan={6} className="p-3 text-right text-xs uppercase text-muted-foreground">Total</td>
-                    <td className="p-3 text-right font-bold">{brl(filteredPaid.reduce((s, b) => s + (b.amount_cents ?? 0), 0))}</td>
+                    <td colSpan={6} className="p-3 text-right type-eyebrow text-muted-foreground">Total</td>
+                    <td className="p-3 text-right type-data font-bold">{brl(filteredPaid.reduce((s, b) => s + (b.amount_cents ?? 0), 0))}</td>
                   </tr>
                 </tfoot>
               )}
@@ -315,17 +314,17 @@ function AdminFinanceiro() {
           </div>
 
           {/* Tabela de preços */}
-          <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-            <h2 className="mb-4 font-semibold">Tabela de preços (por hora)</h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <section className="plane">
+            <h2 className="mb-4 type-h3">Tabela de preços (por hora)</h2>
+            <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {pricing.map((p) => (
-                <div key={p.id} className="rounded-xl bg-background/60 p-3">
-                  <div className="text-xs text-muted-foreground">{TYPE_LABEL[p.booking_type] ?? p.booking_type}</div>
+                <div key={p.id} className="rounded-xl bg-secondary p-3">
+                  <div className="type-small text-muted-foreground">{TYPE_LABEL[p.booking_type] ?? p.booking_type}</div>
                   <div className="mt-1 flex items-center gap-2">
                     <span className="text-sm">R$</span>
                     <input type="text" defaultValue={(p.price_cents / 100).toFixed(2).replace(".", ",")}
                       onBlur={(e) => savePrice(p.id, cents(e.currentTarget.value))}
-                      className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-right font-semibold" />
+                      className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-right type-data font-semibold" />
                   </div>
                 </div>
               ))}
@@ -336,15 +335,15 @@ function AdminFinanceiro() {
 
       {/* ============ CUSTOS ============ */}
       {tab === "custos" && (
-        <div className="space-y-4">
-          <section className="grid gap-4 sm:grid-cols-3">
+        <div className="stack-app">
+          <section className="grid auto-rows-fr gap-4 sm:grid-cols-3">
             <Kpi small label="Custos fixos (mensais)" value={brl(fixedMonth)} accent="bad" />
             <Kpi small label="Custos avulsos do mês" value={brl(oneOffMonth)} accent="bad" />
             <Kpi small label="Total" value={brl(totalCost)} accent="bad" />
           </section>
 
-          <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-            <h2 className="mb-4 font-semibold">Adicionar custo</h2>
+          <section className="plane">
+            <h2 className="mb-4 type-h3">Adicionar custo</h2>
             <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_140px_120px_120px_auto]">
               <input placeholder="Descrição" value={newCost.description} onChange={(e) => setNewCost({ ...newCost, description: e.target.value })}
                 className="rounded-md border border-input bg-background px-3 py-2 text-sm" />
@@ -357,14 +356,14 @@ function AdminFinanceiro() {
                 <option value="mensal">Mensal</option>
                 <option value="avulso">Avulso</option>
               </select>
-              <button onClick={addCost} className="btn-bounce inline-flex items-center gap-1 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">
+              <button onClick={addCost} className="btn-bounce inline-flex items-center gap-1 rounded-full bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">
                 <Plus className="h-4 w-4" /> Adicionar
               </button>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="border-b border-border text-left text-xs uppercase text-muted-foreground">
+                <thead className="border-b border-border text-left type-eyebrow text-muted-foreground">
                   <tr><th className="p-2">Descrição</th><th className="p-2">Categoria</th><th className="p-2">Recorrência</th><th className="p-2">Data</th><th className="p-2 text-right">Valor</th><th /></tr>
                 </thead>
                 <tbody>
@@ -373,8 +372,8 @@ function AdminFinanceiro() {
                       <td className="p-2">{c.description}</td>
                       <td className="p-2 text-muted-foreground">{c.category ?? "—"}</td>
                       <td className="p-2"><span className="rounded-full bg-muted px-2 py-0.5 text-xs">{c.recurrence}</span></td>
-                      <td className="p-2">{format(new Date(c.incurred_on + "T00:00:00"), "dd/MM/yy")}</td>
-                      <td className="p-2 text-right font-semibold">{brl(c.amount_cents)}</td>
+                      <td className="p-2 type-data">{format(new Date(c.incurred_on + "T00:00:00"), "dd/MM/yy")}</td>
+                      <td className="p-2 text-right type-data font-semibold">{brl(c.amount_cents)}</td>
                       <td className="p-2 text-right">
                         <button onClick={() => delCost(c.id)} className="btn-bounce text-destructive hover:opacity-70">
                           <Trash2 className="h-4 w-4" />
@@ -396,13 +395,13 @@ function AdminFinanceiro() {
 function Kpi({ icon: Icon, label, value, accent, small, sub }: { icon?: any; label: string; value: any; accent?: "good" | "bad"; small?: boolean; sub?: string }) {
   const c = accent === "good" ? "text-primary" : accent === "bad" ? "text-destructive" : "";
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+    <div className="plane h-full">
       <div className="flex items-center justify-between">
-        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="type-small text-muted-foreground">{label}</div>
         {Icon && <Icon className="h-4 w-4 text-primary" />}
       </div>
-      <div className={`mt-2 font-bold ${small ? "text-xl" : "text-2xl"} ${c}`}>{value}</div>
-      {sub && <div className="mt-1 text-[11px] text-muted-foreground">{sub}</div>}
+      <div className={`mt-2 type-data font-bold ${small ? "text-xl" : "text-2xl"} ${c}`}>{value}</div>
+      {sub && <div className="mt-1 type-micro text-muted-foreground">{sub}</div>}
     </div>
   );
 }

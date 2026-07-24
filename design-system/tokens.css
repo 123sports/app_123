@@ -1,0 +1,200 @@
+/* ============================================================================
+ * ON COURT — Design System da plataforma On Tennis
+ * Base: engenharia reversa de paulkalkbrenner.net (23/07/2026)
+ * Tradução do sistema techno-brutalista PK para a marca On Tennis.
+ *
+ * Princípios herdados do PK:
+ *   1. Monocromia disciplinada — o par de trabalho é tinta sobre superfície;
+ *      acentos aparecem UM por vez, como um flash.
+ *   2. Uma única família grotesca, peso 700 como identidade.
+ *   3. Display gigante, line-height esmagado, tracking negativo.
+ *   4. Plano: zero sombras, blocos retos; só botões/chips são pill.
+ *   5. Motion com assinatura: cubic-bezier(.625,.05,0,1), arranque lento,
+ *      chegada firme.
+ *
+ * Adaptações On Tennis:
+ *   - Superfície "saibro-cinza" com undertone verde no lugar do #c5c5c5.
+ *   - Tinta quase-preta com undertone verde (herda o ink #003333 da marca).
+ *   - Acento primário: verde-ácido da marca (#ccff33 / #99cc00).
+ *   - Dois modos de superfície: DAY (landing/marketing) e NIGHT (app/admin),
+ *     invertendo tinta/superfície como o PK inverte seções.
+ * ========================================================================== */
+
+:root {
+  /* ===== COR — primitivos ===== */
+  --on-ink:      #0b120c;  /* quase-preto com tinta verde (ex #003333 da marca) */
+  --on-surface:  #c8cbc3;  /* cinza-quadra com undertone verde (ex #c5c5c5 PK) */
+  --on-light:    #ffffff;
+  --on-button:   #10150f;  /* fundo do botão pill (ex #131313 PK) */
+
+  /* Tinta esmaecida — sobre superfícies claras */
+  --on-ink-60: rgba(11, 18, 12, .60);
+  --on-ink-30: rgba(11, 18, 12, .30);
+  --on-ink-20: rgba(11, 18, 12, .20);
+  --on-ink-10: rgba(11, 18, 12, .10);
+  --on-ink-5:  rgba(11, 18, 12, .05);
+
+  /* Luz esmaecida — sobre superfícies escuras */
+  --on-light-70: rgba(255, 255, 255, .70);
+  --on-light-30: rgba(255, 255, 255, .30);
+  --on-light-20: rgba(255, 255, 255, .20);
+  --on-light-10: rgba(255, 255, 255, .10);
+  --on-light-5:  rgba(255, 255, 255, .05);
+
+  /* Acentos — UM por seção/tela. Nunca dois competindo. */
+  --on-accent-acid:  #ccff33;  /* flash da marca — CTAs, estados ativos */
+  --on-accent-lime:  #99cc00;  /* verde base da marca — usos sobre claro */
+  --on-accent-clay:  #ff6831;  /* saibro — alertas, pendências */
+  --on-accent-sky:   #33ccff;  /* quadra dura — informativo, raro */
+  --on-danger:       #e5484d;  /* funcional — destrutivo/erro */
+
+  /* ===== COR — semânticos (modo DAY: tinta sobre saibro-cinza) ===== */
+  --on-bg:            var(--on-surface);
+  --on-fg:            var(--on-ink);
+  --on-fg-muted:      var(--on-ink-60);
+  --on-panel:         var(--on-light);        /* plano elevado = mais claro, não sombra */
+  --on-panel-inverse: var(--on-ink);
+  --on-fg-inverse:    var(--on-light);
+  --on-hairline:      var(--on-ink-20);
+  --on-hairline-strong: var(--on-ink);
+  --on-wash:          var(--on-ink-5);        /* hover de linhas/células */
+  --on-accent:        var(--on-accent-lime);  /* acento default do modo day */
+  --on-accent-fg:     var(--on-ink);
+  --on-focus:         var(--on-accent-lime);
+
+  /* ===== TIPOGRAFIA ===== */
+  /* Uma família cobre tudo. Produção: Archivo (variável, livre) self-hosted —
+     grotesca industrial próxima da ABC Diatype do PK. Peso 700 é a voz da
+     marca; 500 existe só para corpo denso de dados (tabelas do admin). */
+  --on-font: "Archivo", "Archivo Variable", "Helvetica Neue", Arial, sans-serif;
+  --on-weight-ui:   700;   /* padrão — títulos, botões, navegação, corpo curto */
+  --on-weight-data: 500;   /* corpo denso: tabelas, formulários longos */
+
+  /* Escala — 8 papéis. Nada fora dela (mata os text-[8-11px]). */
+  --on-fs-display: clamp(3.5rem, 11vw, 11.25rem); /* landing hero apenas */
+  --on-fs-1: clamp(2rem, 3.2vw, 3rem);   /* título de página (H1 único) */
+  --on-fs-2: 1.5rem;                      /* título de seção */
+  --on-fs-3: 1.125rem;                    /* subtítulo de card / H3 */
+  --on-fs-eyebrow: .8125rem;              /* rótulo de seção UPPERCASE */
+  --on-fs-body: 1rem;
+  --on-fs-small: .875rem;                 /* meta, célula de tabela */
+  --on-fs-micro: .75rem;                  /* MÍNIMO ABSOLUTO — badges, hints */
+
+  --on-lh-display: .8;
+  --on-lh-heading: .9;
+  --on-lh-body: 1.2;
+  --on-lh-reading: 1.4;   /* textos longos (termos, contratos) */
+
+  --on-ls-display: -.05em;
+  --on-ls-heading: -.03em;
+  --on-ls-body: normal;
+  --on-ls-caps: .04em;    /* uppercase pequeno precisa abrir, não fechar */
+
+  /* ===== ESPAÇAMENTO ===== */
+  /* Escala fina (dentro de componentes) */
+  --on-gap-1: .25rem;   /*  4 */
+  --on-gap-2: .5rem;    /*  8 */
+  --on-gap-3: .75rem;   /* 12 */
+  --on-gap-4: 1rem;     /* 16 */
+  --on-gap-5: 1.25rem;  /* 20 */
+  --on-gap-6: 1.5rem;   /* 24 */
+  --on-gap-8: 2rem;     /* 32 */
+
+  /* Ritmo de seção (respiro vertical) */
+  --on-space-app: 1.5rem;      /* entre blocos no app/admin */
+  --on-space-page: 3rem;       /* topo/fundo de página do app */
+  --on-space-land-s: 5rem;     /* landing: seção compacta */
+  --on-space-land: 7.5rem;     /* landing: ritmo padrão (PK) */
+  --on-space-land-l: 12.5rem;  /* landing: respiro dramático */
+
+  /* Padding interno — UMA regra por contexto (mata p-3/4/5/6/8 aleatório) */
+  --on-pad-card: 1.25rem;      /* card padrão */
+  --on-pad-card-compact: .75rem; /* célula densa, item de lista */
+  --on-pad-hero: 2rem;         /* card hero / destaque */
+
+  /* ===== LAYOUT ===== */
+  --on-container-app: 72rem;    /* 1152px — app E admin, um só valor */
+  --on-container-land: 160rem;  /* landing flui até 2560 como o PK */
+  --on-page-x: 1rem;
+
+  /* ===== BORDAS / RAIOS / SOMBRAS ===== */
+  --on-radius-0: 0;        /* blocos, cards, inputs, tabelas, dialogs */
+  --on-radius-pill: 999px; /* botões, chips, badges, avatares — só isso */
+  --on-border: 1px solid var(--on-hairline);
+  --on-border-strong: 1px solid var(--on-hairline-strong);
+  --on-shadow: none;       /* profundidade = cor e escala, nunca elevação */
+
+  /* ===== MOTION ===== */
+  /* Easing assinatura PK: arranque lento, chegada firme. */
+  --on-ease:          cubic-bezier(.625, .05, 0, 1);
+  --on-ease-click:    cubic-bezier(.4, 0, .2, 1);
+  --on-ease-natural:  cubic-bezier(.32, .12, .2, 1);
+  --on-ease-focus:    cubic-bezier(.32, .72, 0, 1);
+  --on-ease-expo-io:  cubic-bezier(.87, 0, .13, 1);   /* menus, expansões */
+  --on-ease-expo-out: cubic-bezier(.16, 1, .3, 1);    /* saídas rápidas */
+
+  --on-dur: .7s;        /* landing / entradas de página */
+  --on-dur-half: .35s;  /* app — metade PK: denso pede metade do tempo */
+  --on-dur-micro: .18s; /* hover/press de controles */
+
+  --on-anim:       var(--on-dur) var(--on-ease);
+  --on-anim-half:  var(--on-dur-half) var(--on-ease);
+
+  --on-char-stagger: .02s;      /* delay por letra nos botões (fórmula PK) */
+  --on-stagger-item: 40ms;      /* delay por item em listas (máx. 8 itens) */
+
+  --on-hover-scale-land: 1.065; /* landing respira mais */
+  --on-hover-scale: 1.03;       /* app/admin: contido */
+  --on-press-scale: .955;
+
+  /* ===== CONTROLES ===== */
+  --on-control-h: 2.75rem;        /* 44px — alvo de toque mínimo */
+  --on-control-h-sm: 2.25rem;     /* 36px — admin denso */
+  --on-btn-pad: .75em 1.25em;
+  --on-focus-ring: 0 0 0 2px var(--on-bg), 0 0 0 4px var(--on-focus);
+}
+
+/* ===== MODO NIGHT (app e admin — inversão PK: branco sobre preto) ===== */
+.on-night {
+  --on-bg:            var(--on-ink);
+  --on-fg:            var(--on-light);
+  --on-fg-muted:      var(--on-light-70);
+  --on-panel:         #141a13;              /* plano elevado do escuro */
+  --on-panel-inverse: var(--on-light);
+  --on-fg-inverse:    var(--on-ink);
+  --on-hairline:      var(--on-light-20);
+  --on-hairline-strong: var(--on-light);
+  --on-wash:          var(--on-light-5);
+  --on-accent:        var(--on-accent-acid); /* no escuro o flash é o ácido */
+  --on-accent-fg:     var(--on-ink);
+  --on-focus:         var(--on-accent-acid);
+}
+
+/* ===== BASE ===== */
+.on-root {
+  background: var(--on-bg);
+  color: var(--on-fg);
+  font-family: var(--on-font);
+  font-weight: var(--on-weight-ui);
+  font-size: var(--on-fs-body);
+  line-height: var(--on-lh-body);
+  -webkit-font-smoothing: antialiased;
+}
+.on-root :is(h1,h2,h3,h4) { letter-spacing: var(--on-ls-heading); line-height: var(--on-lh-heading); }
+.on-root :is(table, [data-density="data"]) { font-weight: var(--on-weight-data); }
+.on-root :is(button, a, [role="button"], input, select, textarea) { touch-action: manipulation; }
+
+/* Foco visível universal — inegociável */
+.on-root :is(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--on-focus-ring);
+  transition: box-shadow var(--on-dur-micro) var(--on-ease-focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .on-root *, .on-root *::before, .on-root *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

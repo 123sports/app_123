@@ -4,6 +4,7 @@ import { Award, Loader2, Save, Star, Search, Pencil, Trash2, X } from "lucide-re
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
+import { PageHeader } from "@/components/PageHeader";
 
 export const Route = createFileRoute("/_authenticated/admin/avaliacoes")({
   component: AdminEvaluations,
@@ -35,7 +36,7 @@ type Evaluation = {
   score_fitness: number;
 };
 
-const defaultScores = () => Object.fromEntries(SKILLS.map((s) => [s.key, 7])) as Record<string, number>;
+const defaultScores = () => Object.fromEntries(SKILLS.map((s) => [s.key, 5])) as Record<string, number>;
 
 function AdminEvaluations() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -104,7 +105,7 @@ function AdminEvaluations() {
   const removeEval = async (ev: Evaluation) => {
     if (!confirm(`Excluir a avaliação de ${studentMap.get(ev.student_id) ?? "aluno"} em ${new Date(ev.evaluation_date).toLocaleDateString("pt-BR")}?`)) return;
     const { error } = await (supabase as any).from("student_evaluations").delete().eq("id", ev.id);
-    if (error) { toast.error(error.message); return; }
+    if (error) { toast.error(error?.message ?? "Não foi possível excluir a avaliação. Tente de novo."); return; }
     toast.success("Avaliação excluída");
     if (editingId === ev.id) resetForm();
     load();
@@ -141,7 +142,7 @@ function AdminEvaluations() {
     }
     setSaving(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(error?.message ?? "Não foi possível salvar a avaliação. Tente de novo.");
       return;
     }
     toast.success(editingId ? "Avaliação atualizada!" : "Avaliação registrada!");
@@ -161,35 +162,32 @@ function AdminEvaluations() {
   }
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Avaliações</h1>
-          <p className="text-sm text-muted-foreground">
-            Registre a evolução do aluno após cada aula. Notas geram nível e certificados automaticamente.
-          </p>
-        </div>
-      </header>
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="Admin · Avaliações"
+        title="Avaliações"
+        subtitle="Registre a evolução do aluno após cada aula. Notas geram nível e certificados automaticamente."
+      />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+      <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
         {/* Form */}
-        <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+        <section className="plane">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">
+            <h2 className="type-h3">
               {editingId ? "Editar avaliação" : "Nova avaliação"}
             </h2>
             {editingId && (
               <button
                 type="button"
                 onClick={() => { playPop(); resetForm(); }}
-                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:bg-secondary"
+                className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:bg-accent"
               >
                 <X className="h-3 w-3" /> Cancelar edição
               </button>
             )}
           </div>
 
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">Aluno</label>
+          <label className="type-eyebrow mb-1 block">Aluno</label>
           <div className="relative mb-3">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -201,7 +199,7 @@ function AdminEvaluations() {
           </div>
           <div className="mb-4 max-h-44 overflow-y-auto rounded-xl border border-border">
             {filtered.length === 0 && (
-              <div className="p-3 text-xs text-muted-foreground">Nenhum aluno</div>
+              <div className="type-small p-3">Nenhum aluno</div>
             )}
             {filtered.map((s) => (
               <button
@@ -209,21 +207,23 @@ function AdminEvaluations() {
                 type="button"
                 onClick={() => { playPop(); setSelected(s.id); }}
                 className={`btn-bounce flex w-full items-center justify-between border-b border-border px-3 py-2 text-left text-sm last:border-0 ${
-                  selected === s.id ? "bg-primary/15 text-primary" : "hover:bg-secondary"
+                  selected === s.id ? "bg-primary text-primary-foreground" : "hover:bg-accent"
                 }`}
               >
                 <span>{s.full_name ?? "Sem nome"}</span>
-                {selected === s.id && <span className="text-xs">selecionado</span>}
+                {selected === s.id && <span className="type-micro">selecionado</span>}
               </button>
             ))}
           </div>
 
+          {selected ? (
+          <>
           <div className="space-y-3">
             {SKILLS.map((sk) => (
               <div key={sk.key}>
-                <div className="mb-1 flex items-center justify-between text-xs">
-                  <span className="font-medium">{sk.label}</span>
-                  <span className="font-bold text-primary">{scores[sk.key]?.toFixed(1)}</span>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="type-eyebrow">{sk.label}</span>
+                  <span className="type-data font-bold text-primary">{scores[sk.key]?.toFixed(1)}</span>
                 </div>
                 <input
                   type="range"
@@ -234,7 +234,10 @@ function AdminEvaluations() {
                   onChange={(e) =>
                     setScores({ ...scores, [sk.key]: Number(e.target.value) })
                   }
-                  className="w-full accent-primary"
+                  className="on-range w-full"
+                  style={{
+                    background: `linear-gradient(to right, var(--foreground) ${(scores[sk.key] ?? 0) * 10}%, var(--input) ${(scores[sk.key] ?? 0) * 10}%)`,
+                  }}
                 />
               </div>
             ))}
@@ -259,24 +262,30 @@ function AdminEvaluations() {
             />
           </div>
 
-          <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-secondary/40 px-4 py-3">
+          <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-secondary px-4 py-3">
             <span className="text-sm text-muted-foreground">Nota geral</span>
-            <span className="text-2xl font-bold text-primary">{overall.toFixed(2)}</span>
+            <span className="type-data text-2xl font-bold text-primary">{overall.toFixed(2)}</span>
           </div>
 
           <button
             onClick={submit}
             disabled={saving || !selected}
-            className="btn-bounce mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-glow disabled:opacity-60"
+            className="btn-bounce mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {editingId ? "Atualizar avaliação" : "Salvar avaliação"}
           </button>
+          </>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+              Selecione um aluno acima para iniciar a avaliação.
+            </div>
+          )}
         </section>
 
         {/* History */}
-        <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-          <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
+        <section className="plane">
+          <h2 className="type-h3 mb-3 flex items-center gap-2">
             <Award className="h-5 w-5 text-primary" /> Últimas avaliações
           </h2>
           {evals.length === 0 ? (
@@ -289,18 +298,18 @@ function AdminEvaluations() {
                 <li
                   key={e.id}
                   className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
-                    editingId === e.id ? "border-primary bg-primary/5" : "border-border bg-background"
+                    editingId === e.id ? "border-primary bg-primary/10" : "border-border bg-secondary"
                   }`}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold">
                       {studentMap.get(e.student_id) ?? "Aluno"}
                     </div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="type-small">
                       {new Date(e.evaluation_date).toLocaleDateString("pt-BR")}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 rounded-full bg-primary/15 px-3 py-1 text-sm font-bold text-primary">
+                  <div className="type-data flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-sm font-bold text-primary">
                     <Star className="h-3.5 w-3.5 fill-primary" />
                     {Number(e.overall_score).toFixed(2)}
                   </div>
@@ -309,7 +318,7 @@ function AdminEvaluations() {
                       type="button"
                       onClick={() => startEdit(e)}
                       title="Editar"
-                      className="rounded-full p-2 text-muted-foreground hover:bg-secondary hover:text-primary"
+                      className="rounded-full p-2 text-muted-foreground hover:bg-accent hover:text-primary"
                     >
                       <Pencil className="h-4 w-4" />
                     </button>

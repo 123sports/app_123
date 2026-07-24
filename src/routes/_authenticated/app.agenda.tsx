@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
+import { PageHeader } from "@/components/PageHeader";
 import { labelType } from "./app.index";
 import {
   format, addDays, addMonths, startOfMonth, endOfMonth, eachDayOfInterval,
@@ -152,6 +153,8 @@ function Agenda() {
   const selectedDateStr = format(selected, "yyyy-MM-dd");
   const dayBlocks = blocks.filter((b) => b.block_date === selectedDateStr && b.professor_id === null);
   const blockedHours = new Map(dayBlocks.map((b) => [b.start_hour, b.reason] as const));
+  // Só horários abertos: sem reserva e sem bloqueio.
+  const openHours = HOURS.filter((h) => !takenHours.has(h) && blockedHours.get(h) === undefined);
 
   const toggleHour = (h: number) => {
     playPop();
@@ -193,7 +196,7 @@ function Agenda() {
         .lte("booking_date", format(endOfMonth(cursor), "yyyy-MM-dd"));
       setBookings(data ?? []);
     } catch (e: any) {
-      toast.error(e.message ?? "Erro ao reservar");
+      toast.error(e?.message ?? "Não foi possível reservar. Tente de novo.");
     } finally {
       setLoading(false);
     }
@@ -212,21 +215,22 @@ function Agenda() {
       }
     }
     const { error } = await supabase.from("bookings").delete().eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível cancelar. Tente de novo.");
     toast.success("Reserva cancelada");
     setBookings((b) => b.filter((x) => x.id !== id));
   };
 
   return (
-    <div className="space-y-6 animate-float-in">
-      <div>
-        <h1 className="text-3xl font-bold">Agenda da quadra</h1>
-        <p className="text-muted-foreground">Escolha o dia e o horário livre · 06h às 22h</p>
-      </div>
+    <div className="stack-app animate-float-in">
+      <PageHeader
+        eyebrow="Agenda"
+        title="Agenda da quadra"
+        subtitle="Escolha o dia e o horário livre · 06h às 22h"
+      />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         {/* Calendar */}
-        <div className="rounded-3xl border border-border bg-card p-6 shadow-soft">
+        <div className="plane">
           <div className="mb-4 flex items-center justify-between">
             <button
               onClick={() => { playPop(); setCursor(addMonths(cursor, -1)); }}
@@ -235,7 +239,7 @@ function Agenda() {
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
-            <h2 className="text-lg font-semibold capitalize">
+            <h2 className="type-h3 capitalize">
               {format(cursor, "MMMM yyyy", { locale: ptBR })}
             </h2>
             <button
@@ -265,15 +269,15 @@ function Agenda() {
                   onClick={() => { playPop(); setSelected(d); }}
                   className={`relative flex aspect-square flex-col items-center justify-start gap-0.5 rounded-xl p-1 text-sm font-medium transition ${
                     sel
-                      ? "bg-primary text-primary-foreground shadow-glow"
+                      ? "bg-primary text-primary-foreground"
                       : pick
-                      ? "bg-background hover:bg-secondary"
+                      ? "bg-secondary hover:bg-muted"
                       : "bg-muted/40 text-muted-foreground/40"
                   }`}
                 >
-                  <span className="leading-none">{d.getDate()}</span>
+                  <span className="leading-none type-data">{d.getDate()}</span>
                   {count > 0 && (
-                    <span className="mt-auto rounded-full bg-primary/80 px-1.5 py-[1px] text-[8px] font-bold text-primary-foreground">
+                    <span className="mt-auto rounded-full bg-primary/80 px-1.5 py-[1px] type-micro font-bold text-primary-foreground">
                       {count}
                     </span>
                   )}
@@ -287,10 +291,10 @@ function Agenda() {
         </div>
 
         {/* Booking panel */}
-        <div className="space-y-5 rounded-3xl border border-border bg-card p-6 shadow-soft">
+        <div className="space-y-4 plane">
           <div>
-            <div className="text-xs text-muted-foreground">Selecionado</div>
-            <div className="text-lg font-bold capitalize">
+            <div className="type-eyebrow text-muted-foreground">Selecionado</div>
+            <div className="type-h3 capitalize">
               {format(selected, "EEEE, dd 'de' MMMM", { locale: ptBR })}
             </div>
           </div>
@@ -339,9 +343,9 @@ function Agenda() {
 
 
           <div>
-            <div className="mb-2 text-xs font-medium text-muted-foreground">Horários (06h–22h)</div>
+            <div className="mb-2 type-eyebrow">Horários livres</div>
             <div className="grid grid-cols-4 gap-2">
-              {HOURS.map((h) => {
+              {openHours.map((h) => {
                 const taken = takenHours.has(h);
                 const blockedReason = blockedHours.get(h);
                 const slot = selectedBookings.find((b) => b.start_hour === h);
@@ -353,8 +357,8 @@ function Agenda() {
                       title={blockedReason ? `Bloqueado: ${blockedReason}` : "Horário bloqueado"}
                       className="flex flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-destructive/40 bg-destructive/10 px-2 py-2 text-xs font-semibold text-destructive/80"
                     >
-                      <span>{String(h).padStart(2, "0")}:00</span>
-                      <span className="text-[9px] font-normal">Bloqueado</span>
+                      <span className="type-data">{String(h).padStart(2, "0")}:00</span>
+                      <span className="type-micro font-normal">Bloqueado</span>
                     </div>
                   );
                 }
@@ -373,18 +377,18 @@ function Agenda() {
                       title={mine ? "Sua reserva — clique para cancelar" : "Horário ocupado"}
                     >
                       <div className="flex w-full items-center justify-between">
-                        <span>{String(h).padStart(2, "0")}:00</span>
-                        {mine && <span className="text-[9px] font-bold text-primary">SUA</span>}
+                        <span className="type-data">{String(h).padStart(2, "0")}:00</span>
+                        {mine && <span className="type-micro font-bold text-primary">SUA</span>}
                       </div>
                       {mine ? (
                         <>
                           <MiniAvatar url={owner?.avatar ?? null} name={owner?.name ?? "?"} />
-                          <span className="line-clamp-1 max-w-full text-[10px] font-medium">
+                          <span className="line-clamp-1 max-w-full type-micro font-medium">
                             {owner?.name?.split(" ")[0] ?? "Você"}
                           </span>
                         </>
                       ) : (
-                        <span className="text-[10px] font-medium text-muted-foreground">Ocupado</span>
+                        <span className="type-micro font-medium text-muted-foreground">Ocupado</span>
                       )}
                     </button>
                   );
@@ -395,10 +399,10 @@ function Agenda() {
                     key={h}
                     disabled={taken || loading}
                     onClick={() => toggleHour(h)}
-                    className={`btn-bounce rounded-lg border px-2 py-2 text-xs font-semibold ${
+                    className={`btn-bounce rounded-full border px-2 py-2 text-xs font-semibold type-data ${
                       isPending
                         ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-background hover:border-primary"
+                        : "border-border bg-secondary hover:border-primary"
                     }`}
                   >
                     {String(h).padStart(2, "0")}:00
@@ -406,6 +410,9 @@ function Agenda() {
                 );
               })}
             </div>
+            {openHours.length === 0 && (
+              <p className="py-4 text-sm text-muted-foreground">Nenhum horário livre neste dia.</p>
+            )}
             {pendingHours.size > 0 && (
               <div className="mt-4 space-y-2 rounded-xl border border-primary/30 bg-primary/5 p-3">
                 <div className="text-xs text-muted-foreground">
@@ -416,7 +423,7 @@ function Agenda() {
                   <button
                     onClick={confirmBooking}
                     disabled={loading}
-                    className="btn-bounce flex-1 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-glow hover:bg-primary/90 disabled:opacity-60"
+                    className="btn-bounce flex-1 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
                   >
                     {loading ? (
                       <span className="inline-flex items-center gap-2">
@@ -429,7 +436,7 @@ function Agenda() {
                   <button
                     onClick={() => { playPop(); setPendingHours(new Set()); }}
                     disabled={loading}
-                    className="btn-bounce rounded-xl border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-secondary"
+                    className="btn-bounce rounded-full border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-accent"
                   >
                     Limpar
                   </button>
@@ -439,23 +446,18 @@ function Agenda() {
           </div>
 
 
-          {selectedBookings.length > 0 && (
+          {selectedBookings.some((b) => b.user_id === userId) && (
             <div className="border-t border-border pt-4">
-              <div className="mb-2 text-xs font-medium text-muted-foreground">Já reservados neste dia</div>
+              <div className="mb-2 type-eyebrow">Minhas reservas neste dia</div>
               <ul className="space-y-1 text-sm">
-                {selectedBookings.map((b) => {
-                  const mine = b.user_id === userId;
-                  return (
-                    <li key={b.id} className="flex justify-between">
-                      <span>{String(b.start_hour).padStart(2, "0")}:00 · {mine ? labelType(b.type) : "Ocupado"}</span>
-                      {mine && (
-                        <button onClick={() => cancel(b.id)} className="text-xs text-destructive hover:underline">
-                          cancelar
-                        </button>
-                      )}
-                    </li>
-                  );
-                })}
+                {selectedBookings.filter((b) => b.user_id === userId).map((b) => (
+                  <li key={b.id} className="flex justify-between">
+                    <span className="type-data">{String(b.start_hour).padStart(2, "0")}:00 · {labelType(b.type)}</span>
+                    <button onClick={() => cancel(b.id)} className="text-xs text-destructive hover:underline">
+                      cancelar
+                    </button>
+                  </li>
+                ))}
               </ul>
             </div>
           )}
@@ -468,7 +470,7 @@ function Agenda() {
 function MiniAvatar({ url, name }: { url: string | null; name: string }) {
   const initials = (name || "?").split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
   return (
-    <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-border bg-primary text-[10px] font-bold text-primary-foreground">
+    <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-border bg-primary type-micro font-bold text-primary-foreground">
       {url ? <img src={url} alt={name} className="h-full w-full object-cover" /> : initials}
     </div>
   );

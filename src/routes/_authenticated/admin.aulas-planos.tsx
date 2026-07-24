@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { PageHeader } from "@/components/PageHeader";
 import { brl, cents as toCents } from "@/lib/money";
 
 export const Route = createFileRoute("/_authenticated/admin/aulas-planos")({
@@ -38,34 +39,32 @@ function AdminAulasPlanos() {
   const remove = async (id: string) => {
     if (!confirm("Remover este plano?")) return;
     const { error } = await supabase.from("class_plans").delete().eq("id", id);
-    if (error) toast.error(error.message); else { toast.success("Plano removido"); load(); }
+    if (error) toast.error(error?.message ?? "Não foi possível remover o plano. Tente de novo."); else { toast.success("Plano removido"); load(); }
   };
 
   return (
-    <div className="space-y-6 animate-float-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Planos de Aulas</h1>
-          <p className="text-muted-foreground">Catálogo padrão exibido para todos os alunos.</p>
-        </div>
-        <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Novo plano</Button>
-      </div>
+    <div className="space-y-4 animate-float-in">
+      <PageHeader
+        eyebrow="Admin · Planos"
+        title="Planos de Aulas"
+        subtitle="Catálogo padrão exibido para todos os alunos."
+        actions={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" /> Novo plano</Button>}
+      />
 
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 auto-rows-fr md:grid-cols-2 lg:grid-cols-3">
         {plans.map((p) => (
-          <Card key={p.id} className={p.active ? "" : "opacity-60"}>
+          <Card key={p.id} className={p.active ? "h-full" : "h-full opacity-60"}>
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between gap-2">
-                <CardTitle className="text-base">{p.title}</CardTitle>
-                <span className="text-xs text-muted-foreground">{p.active ? "Ativo" : "Inativo"}</span>
+                <CardTitle className="type-h3">{p.title}</CardTitle>
+                <span className="type-micro text-muted-foreground">{p.active ? "Ativo" : "Inativo"}</span>
               </div>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div><strong>{p.frequency_per_week}x/semana</strong> · {p.duration_months} mês(es)</div>
-              <div className="text-lg font-bold">{brl(p.price_cents)}</div>
-              <div className="text-xs text-muted-foreground">{p.modality} · {p.class_duration_min} min/aula</div>
-              <div className="text-lg font-bold">{brl(p.price_cents)}</div>
-              {p.description && <p className="text-muted-foreground">{p.description}</p>}
+              <div className="text-lg font-bold type-data">{brl(p.price_cents)}</div>
+              <div className="type-micro text-muted-foreground">{p.modality} · {p.class_duration_min} min/aula</div>
+              {p.description && <p className="type-small text-muted-foreground">{p.description}</p>}
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => setEdit(p)}><Pencil className="h-4 w-4" /> Editar</Button>
                 <Button size="sm" variant="destructive" onClick={() => remove(p.id)}><Trash2 className="h-4 w-4" /></Button>
@@ -112,7 +111,7 @@ function PlanDialog({ plan, onClose }: { plan: Plan | null; onClose: (saved: boo
       toast.success(plan ? "Plano atualizado" : "Plano criado");
       onClose(true);
     } catch (e: any) {
-      toast.error(e.message ?? "Erro ao salvar");
+      toast.error(e?.message ?? "Não foi possível salvar o plano. Tente de novo.");
     } finally { setSaving(false); }
   };
 

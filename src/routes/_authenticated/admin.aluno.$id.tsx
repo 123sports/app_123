@@ -40,7 +40,7 @@ function AlunoDetalhe() {
   const revenue = bookings.filter((b) => b.payment_status === "pago").reduce((s, b) => s + (b.amount_cents ?? 0), 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Link to="/admin/alunos" className="btn-bounce inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Alunos
       </Link>
@@ -49,28 +49,28 @@ function AlunoDetalhe() {
         <p className="text-muted-foreground">Carregando…</p>
       ) : (
         <>
-          <header className="flex flex-wrap items-center gap-5 rounded-2xl border border-border bg-card p-6 shadow-soft">
+          <header className="flex flex-wrap items-center gap-4 py-2">
             <div className="h-20 w-20 overflow-hidden rounded-full border-2 border-primary/40 bg-primary text-2xl font-bold text-primary-foreground flex items-center justify-center">
               {avatar ? <img src={avatar} alt={profile.full_name ?? ""} className="h-full w-full object-cover" />
                 : (profile.full_name ?? "?").split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase()}
             </div>
             <div className="flex-1">
-              <h1 className="text-2xl font-bold">{profile.full_name ?? "Sem nome"}</h1>
-              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+              <h1 className="type-h2">{profile.full_name ?? "Sem nome"}</h1>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 type-small text-muted-foreground">
                 {profile.phone && <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" /> {profile.phone}</span>}
                 {profile.birth_date && <span className="inline-flex items-center gap-1"><Cake className="h-3 w-3" /> {format(new Date(profile.birth_date + "T00:00:00"), "dd/MM/yyyy")}</span>}
                 {profile.skill_level && <span>· {profile.skill_level}</span>}
               </div>
             </div>
             <div className="text-right">
-              <div className="text-xs text-muted-foreground">Pontos</div>
-              <div className="flex items-center justify-end gap-1 text-2xl font-bold text-primary">
+              <div className="type-eyebrow">Pontos</div>
+              <div className="flex items-center justify-end gap-1 text-2xl font-bold type-data text-primary">
                 <Trophy className="h-5 w-5" /> {points}
               </div>
             </div>
           </header>
 
-          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <section className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <Mini label="Reservas" value={total} />
             <Mini label="Presenças" value={attended} accent="good" />
             <Mini label="Faltas" value={missed} accent="bad" />
@@ -78,9 +78,9 @@ function AlunoDetalhe() {
             <Mini label="Receita gerada" value={brl(revenue)} />
           </section>
 
-          <section className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-              <h2 className="mb-3 font-semibold">Emergência</h2>
+          <section className="grid auto-rows-fr gap-4 lg:grid-cols-2">
+            <div className="bg-card/30 p-5 h-full">
+              <h2 className="type-h3 mb-3">Emergência</h2>
               <div className="space-y-2 text-sm">
                 <Row label="Contato" value={profile.emergency_contact_name ?? "—"} />
                 <Row label="Telefone" value={profile.emergency_contact_phone ?? "—"} />
@@ -96,22 +96,22 @@ function AlunoDetalhe() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-              <h2 className="mb-3 font-semibold">Histórico de reservas</h2>
+            <div className="bg-card/30 p-5 h-full">
+              <h2 className="type-h3 mb-3">Histórico de reservas</h2>
               {bookings.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nenhuma reserva ainda.</p>
               ) : (
                 <ul className="max-h-80 space-y-2 overflow-y-auto pr-1 text-sm">
                   {bookings.map((b) => (
-                    <li key={b.id} className="flex items-center justify-between rounded-lg bg-background/60 px-3 py-2">
+                    <li key={b.id} className="flex items-center justify-between bg-secondary px-3 py-2">
                       <div>
-                        <div className="font-medium">{format(new Date(b.booking_date + "T00:00:00"), "dd/MM/yy")} · {String(b.start_hour).padStart(2, "0")}:00</div>
-                        <div className="text-xs text-muted-foreground">{b.type.replace("_", " ")}</div>
+                        <div className="type-data font-medium">{format(new Date(b.booking_date + "T00:00:00"), "dd/MM/yy")} · {String(b.start_hour).padStart(2, "0")}:00</div>
+                        <div className="type-micro text-muted-foreground">{b.type.replace("_", " ")}</div>
                       </div>
                       <div className="text-right">
                         <Badge color={b.payment_status === "pago" ? "good" : "warn"}>{b.payment_status}</Badge>
-                        {b.attended === true && <span className="ml-1 text-xs text-primary">presente</span>}
-                        {b.attended === false && <span className="ml-1 text-xs text-destructive">faltou</span>}
+                        {b.attended === true && <span className="ml-1 type-micro text-primary">presente</span>}
+                        {b.attended === false && <span className="ml-1 type-micro text-destructive">faltou</span>}
                       </div>
                     </li>
                   ))}
@@ -128,9 +128,9 @@ function AlunoDetalhe() {
 function Mini({ label, value, accent }: { label: string; value: any; accent?: "good" | "bad" }) {
   const c = accent === "good" ? "text-primary" : accent === "bad" ? "text-destructive" : "";
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-soft">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className={`mt-1 text-xl font-bold ${c}`}>{value}</div>
+    <div className="bg-card/30 p-5 h-full">
+      <div className="type-eyebrow">{label}</div>
+      <div className={`mt-1 text-xl font-bold type-data ${c}`}>{value}</div>
     </div>
   );
 }

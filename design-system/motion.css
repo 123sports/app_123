@@ -1,0 +1,112 @@
+/* ============================================================================
+ * ON COURT — estilos do runtime de motion (par do motion.js)
+ * Importe junto com tokens.css. Tudo usa os tokens de motion do DS.
+ * ========================================================================== */
+
+/* ---------- 1. Reveal de entrada ---------- */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(1.5rem);
+  transition: opacity var(--on-anim), transform var(--on-anim);
+}
+.on-night [data-reveal],
+[data-density="app"] [data-reveal] {
+  transition-duration: var(--on-dur-half); /* app: metade do tempo */
+}
+[data-reveal].is-in { opacity: 1; transform: none; }
+
+/* ---------- 2. Botão letra-a-letra (roll-up vertical, fórmula PK) ---------- */
+[data-char-button] { overflow: clip; gap: 0; } /* gap de flex não vaza entre letras */
+.on-char { display: inline-block; position: relative; overflow: clip; }
+.on-char span {
+  display: inline-block;
+  transition: translate .5s calc((var(--char) - 1) * var(--on-char-stagger)) var(--on-ease);
+}
+.on-char span:last-child { position: absolute; left: 0; top: 0; translate: 0 100%; }
+:is([data-char-button]:hover, [data-char-button]:focus-visible) .on-char span { translate: 0 -100%; }
+:is([data-char-button]:hover, [data-char-button]:focus-visible) .on-char span:last-child { translate: 0 0; }
+
+/* ---------- 3. Revelação pixelada ---------- */
+[data-px-reveal] { position: relative; overflow: clip; }
+.on-px-panel {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  display: grid;
+  grid-template-columns: repeat(25, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+}
+.on-px-cell {
+  background: var(--on-bg);                    /* a mídia dissolve no fundo */
+  transition: opacity .35s steps(2, jump-none); /* corte seco, sem easing */
+}
+.on-px-cell.is-off { opacity: 0; }
+
+/* ---------- 4. Press/hover padrão de controles ---------- */
+.on-press {
+  transition: transform var(--on-dur-micro) var(--on-ease-click),
+              filter var(--on-dur-micro) var(--on-ease-click);
+}
+.on-press:hover { transform: scale(var(--on-hover-scale)); }
+.on-press:active { transform: scale(var(--on-press-scale)); filter: brightness(.94); }
+.on-land .on-press:hover { transform: scale(var(--on-hover-scale-land)); }
+
+/* ---------- 5. Marquee ---------- */
+[data-marquee] {
+  display: flex; overflow: clip; gap: var(--on-gap-8);
+  white-space: nowrap;
+}
+[data-marquee] > * {
+  display: flex; gap: var(--on-gap-8); align-items: center;
+  flex-shrink: 0; /* largura vem do conteúdo — o JS repete até cobrir o container */
+}
+.on-marquee-run > * { animation: on-marquee var(--on-marquee-dur, 24s) linear infinite; }
+.on-marquee-paused > * { animation-play-state: paused; }
+@keyframes on-marquee { to { transform: translateX(calc(-100% - var(--on-gap-8))); } }
+
+/* ---------- 6. Grain (landing apenas — camada de textura PK) ---------- */
+.on-grain {
+  position: fixed; inset: -100%; z-index: 99; pointer-events: none;
+  opacity: .05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: on-grain 1s steps(10) infinite;
+}
+@keyframes on-grain {
+  0%, 100% { transform: translate(0, 0); }
+  10%, 30%, 50%, 70%, 90% { transform: translate(-5%, -10%); }
+  20%, 40%, 60%, 80% { transform: translate(-15%, -20%); }
+}
+
+/* ---------- 7. Transição de rota (app) ---------- */
+/* Aplique .on-route-enter no container da rota ao montar (TanStack). */
+.on-route-enter {
+  animation: on-route-in var(--on-dur-half) var(--on-ease) both;
+}
+@keyframes on-route-in {
+  from { opacity: 0; transform: translateY(.75rem); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---------- 8. Skeleton (carregamento sem flash de vazio) ---------- */
+.on-skeleton {
+  position: relative; overflow: clip;
+  background: var(--on-wash);
+  color: transparent !important;
+  pointer-events: none; user-select: none;
+}
+.on-skeleton::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 20%, var(--on-wash) 50%, transparent 80%);
+  animation: on-shimmer 1.4s var(--on-ease) infinite;
+}
+@keyframes on-shimmer {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] { opacity: 1; transform: none; transition: none; }
+  .on-char span { transition: none; }
+  .on-px-panel, .on-grain { display: none; }
+  .on-marquee-run > * { animation: none; }
+  .on-route-enter { animation: none; }
+  .on-skeleton::after { animation: none; }
+}

@@ -1,7 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { PageHeader } from "@/components/PageHeader";
+import { PersonList, PersonRow, PersonStat } from "@/components/PersonList";
 
 export const Route = createFileRoute("/_authenticated/admin/alunos")({
   component: AdminAlunos,
@@ -58,54 +60,46 @@ function AdminAlunos() {
   }, [list, q]);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold">Alunos</h1>
-          <p className="text-muted-foreground">{list.length} aluno(s) cadastrado(s).</p>
-        </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar por nome…"
-            className="w-64 rounded-full border border-input bg-background pl-9 pr-3 py-2 text-sm"
-          />
-        </div>
-      </div>
+    <div className="stack-app">
+      <PageHeader
+        eyebrow="Admin · Alunos"
+        title="Alunos"
+        subtitle={`${list.length} aluno(s) cadastrado(s).`}
+        actions={
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={q} onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar por nome…"
+              className="w-64 rounded-full border border-input bg-background pl-9 pr-3 py-2 text-sm"
+            />
+          </div>
+        }
+      />
 
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border bg-background/40 text-left text-xs uppercase text-muted-foreground">
-            <tr>
-              <th className="p-3">Nome</th>
-              <th className="p-3">Telefone</th>
-              <th className="p-3">Nível</th>
-              <th className="p-3 text-right">Reservas</th>
-              <th className="p-3 text-right">Presenças</th>
-              <th className="p-3 text-right">Faltas</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="plane">
+        {filtered.length === 0 ? (
+          <p className="py-8 text-center text-muted-foreground">Nenhum aluno.</p>
+        ) : (
+          <PersonList>
             {filtered.map((a) => (
-              <tr key={a.id} className="border-b border-border/60 hover:bg-background/40">
-                <td className="p-3">
-                  <Link to="/admin/aluno/$id" params={{ id: a.id }} className="font-medium hover:underline">
-                    {a.full_name ?? "Sem nome"}
-                  </Link>
-                </td>
-                <td className="p-3 text-muted-foreground">{a.phone ?? "—"}</td>
-                <td className="p-3">{a.skill_level ?? "—"}</td>
-                <td className="p-3 text-right">{a.bookings}</td>
-                <td className="p-3 text-right text-primary">{a.attended}</td>
-                <td className="p-3 text-right text-destructive">{a.missed}</td>
-              </tr>
+              <PersonRow
+                key={a.id}
+                to="/admin/aluno/$id"
+                params={{ id: a.id }}
+                name={a.full_name ?? "Sem nome"}
+                meta={`${a.phone ?? "—"}${a.skill_level ? ` · ${a.skill_level}` : ""}`}
+                trailing={
+                  <>
+                    <PersonStat label="Reservas" value={a.bookings} />
+                    <PersonStat label="Presenças" value={a.attended} />
+                    <PersonStat label="Faltas" value={a.missed} tone="danger" />
+                  </>
+                }
+              />
             ))}
-            {filtered.length === 0 && (
-              <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Nenhum aluno.</td></tr>
-            )}
-          </tbody>
-        </table>
+          </PersonList>
+        )}
       </div>
     </div>
   );

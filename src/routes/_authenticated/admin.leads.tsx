@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Phone, MapPin, MessageSquare, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { PageHeader } from "@/components/PageHeader";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -31,14 +32,14 @@ function AdminLeads() {
       .from("leads")
       .select("id, name, phone, city, message, status, created_at")
       .order("created_at", { ascending: false });
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível carregar os leads. Tente de novo.");
     setRows((data ?? []) as Lead[]);
   };
   useEffect(() => { load(); }, []);
 
   const update = async (id: string, patch: Partial<Lead>) => {
     const { error } = await (supabase as any).from("leads").update(patch).eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível atualizar o lead. Tente de novo.");
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
     toast.success("Lead atualizado");
   };
@@ -46,7 +47,7 @@ function AdminLeads() {
   const remove = async (id: string) => {
     if (!confirm("Excluir este lead?")) return;
     const { error } = await (supabase as any).from("leads").delete().eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível excluir o lead. Tente de novo.");
     setRows((rs) => rs.filter((r) => r.id !== id));
     toast.success("Lead excluído");
   };
@@ -54,34 +55,35 @@ function AdminLeads() {
   const filtered = filter === "all" ? rows : rows.filter((r) => r.status === filter);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold">Leads</h1>
-          <p className="text-muted-foreground">Pré-cadastros recebidos pela landing page.</p>
-        </div>
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="rounded-lg border border-input bg-background px-2 py-1.5 text-sm"
-        >
-          <option value="all">Todos status</option>
-          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="Admin · Leads"
+        title="Leads"
+        subtitle="Pré-cadastros recebidos pela landing page."
+        actions={
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="rounded-full border border-input bg-background px-3 py-1.5 text-sm"
+          >
+            <option value="all">Todos status</option>
+            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        }
+      />
 
       {filtered.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-12 text-center text-muted-foreground">
           Nenhum lead ainda.
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid auto-rows-fr gap-4 md:grid-cols-2">
           {filtered.map((l) => (
-            <div key={l.id} className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+            <div key={l.id} className="plane h-full">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-lg font-bold">{l.name}</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="type-h3">{l.name}</div>
+                  <div className="type-micro text-muted-foreground type-data">
                     {format(new Date(l.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                   </div>
                 </div>
@@ -113,7 +115,7 @@ function AdminLeads() {
                 <select
                   value={l.status}
                   onChange={(e) => update(l.id, { status: e.target.value })}
-                  className="flex-1 rounded-lg border border-input bg-background px-2 py-1.5 text-sm"
+                  className="flex-1 rounded-full border border-input bg-background px-3 py-1.5 text-sm"
                 >
                   {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
@@ -121,7 +123,7 @@ function AdminLeads() {
                   href={`https://wa.me/${l.phone.replace(/\D/g, "")}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="btn-bounce rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+                  className="btn-bounce rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
                 >
                   WhatsApp
                 </a>

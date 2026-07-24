@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Star } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { FeedbackForm } from "@/components/FeedbackForm";
+import { PageHeader } from "@/components/PageHeader";
 
 export const Route = createFileRoute("/_authenticated/app/feedback")({
   component: AppFeedback,
@@ -38,19 +39,20 @@ function AppFeedback() {
   }, []);
 
   return (
-    <div className="space-y-6 animate-float-in">
-      <div>
-        <h1 className="text-3xl font-bold">Avaliar professores</h1>
-        <p className="text-muted-foreground">Conte como tem sido aprender — seu feedback ajuda muito.</p>
-      </div>
+    <div className="space-y-4 animate-float-in">
+      <PageHeader
+        eyebrow="Feedback"
+        title="Avaliar professores"
+        subtitle="Conte como tem sido aprender — seu feedback ajuda muito."
+      />
 
       {!selected ? (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid auto-rows-fr gap-4 sm:grid-cols-2">
           {professors.map((p) => (
             <button
               key={p.id}
               onClick={() => setSelected(p)}
-              className="btn-bounce flex items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-soft hover:border-primary"
+              className="plane btn-bounce flex h-full items-center gap-3 text-left hover:border-primary"
             >
               <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-primary text-primary-foreground font-bold">
                 {avatars[p.id]
@@ -58,15 +60,15 @@ function AppFeedback() {
                   : (p.full_name ?? "?").split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}
               </div>
               <div>
-                <div className="font-semibold">{p.full_name ?? "Professor"}</div>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <div className="type-h3">{p.full_name ?? "Professor"}</div>
+                <div className="flex items-center gap-1 type-small">
                   <Star className="h-3 w-3" /> Avaliar
                 </div>
               </div>
             </button>
           ))}
           {professors.length === 0 && (
-            <div className="col-span-full rounded-2xl border border-dashed border-border bg-card/50 p-12 text-center text-muted-foreground">
+            <div className="col-span-full border border-dashed border-border bg-secondary p-12 text-center type-small">
               Nenhum professor cadastrado ainda.
             </div>
           )}
@@ -75,7 +77,7 @@ function AppFeedback() {
         <div className="space-y-3">
           <button
             onClick={() => setSelected(null)}
-            className="btn-bounce text-sm text-muted-foreground hover:text-foreground"
+            className="btn-bounce type-small text-muted-foreground hover:text-foreground"
           >
             ← Trocar professor
           </button>

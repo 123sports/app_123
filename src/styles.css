@@ -4,11 +4,25 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ============================================================================
+ * ON COURT — design system aplicado à plataforma On Tennis
+ * Base: engenharia reversa de paulkalkbrenner.net (techno-brutalismo).
+ * App e admin vivem no modo NIGHT (luz sobre tinta), acento verde-ácido como
+ * flash. Superfícies planas (zero sombra), blocos retos, botões/chips pill,
+ * uma grotesca (Archivo) em peso 700. Ver design-system/DESIGN-SYSTEM.md.
+ * ========================================================================== */
+
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* Raios: só dois no sistema — 0 (blocos) e pill (botões/chips/avatares).
+     Todos os passos intermediários do shadcn colapsam para 0. */
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --radius-3xl: 0;
+  --radius-full: 999px;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -30,61 +44,78 @@
   --color-ring: var(--ring);
   --color-court: var(--court);
   --color-court-line: var(--court-line);
-  --font-display: "Fredoka", "Quicksand", system-ui, sans-serif;
-  --font-sans: "Quicksand", system-ui, sans-serif;
+
+  /* Acentos próprios do DS (bg-acid, text-clay, …) */
+  --color-acid: var(--acid);
+  --color-lime: var(--lime);
+  --color-clay: var(--clay);
+  --color-sky: var(--sky);
+  --color-ink: var(--ink);
+  --color-surface: var(--surface);
+  --color-light: var(--light);
+
+  /* Uma família cobre display, texto e UI (Archivo variável) */
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Archivo", "Helvetica Neue", Arial, sans-serif;
 }
 
 :root, .dark {
-  --radius: 0.875rem;
+  --radius: 0;
 
-  /* Olimpio Neto — On Tennis brand palette
-     Primary #99cc00, Accent #ccff33, Deep #006633, Ink #003333.
-     Dark theme uses deep teal/green ink as background. */
-  --background: oklch(0.16 0.03 175);
-  --foreground: oklch(0.97 0.01 120);
+  /* ON COURT — modo DAY: tinta sobre saibro-cinza, cards brancos, flash verde
+     (segue o modelo das seções claras do styleguide). */
+  --background: #c8cbc3;      /* saibro-cinza — superfície dominante */
+  --foreground: #0b120c;      /* tinta */
 
-  --card: oklch(0.21 0.035 175);
-  --card-foreground: oklch(0.97 0.01 120);
+  --card: #ffffff;            /* plano branco sobre o saibro */
+  --card-foreground: #0b120c;
 
-  --popover: oklch(0.21 0.035 175);
-  --popover-foreground: oklch(0.97 0.01 120);
+  --popover: #ffffff;
+  --popover-foreground: #0b120c;
 
-  /* #99cc00 — brand green */
-  --primary: oklch(0.78 0.21 128);
-  --primary-foreground: oklch(0.16 0.03 175);
+  --primary: #0b120c;         /* CTA e item ativo = pill de tinta (styleguide hero) */
+  --primary-foreground: #ffffff;
 
-  --secondary: oklch(0.27 0.03 175);
-  --secondary-foreground: oklch(0.97 0.01 120);
+  --secondary: #e6e8e1;       /* superfície de apoio (chips neutros) */
+  --secondary-foreground: #0b120c;
 
-  --muted: oklch(0.24 0.03 175);
-  --muted-foreground: oklch(0.72 0.02 140);
+  --muted: #eceeE8;
+  --muted-foreground: rgba(11, 18, 12, .58);
 
-  /* #ccff33 — acid tennis-ball accent */
-  --accent: oklch(0.94 0.22 122);
-  --accent-foreground: oklch(0.16 0.03 175);
+  --accent: rgba(11, 18, 12, .06);       /* hover sutil sobre claro */
+  --accent-foreground: #0b120c;
 
-  --destructive: oklch(0.65 0.22 25);
-  --destructive-foreground: oklch(0.99 0 0);
+  --destructive: #d5342f;
+  --destructive-foreground: #ffffff;
 
-  --border: oklch(0.32 0.03 175);
-  --input: oklch(0.32 0.03 175);
-  --ring: oklch(0.78 0.21 128);
+  --border: rgba(11, 18, 12, .16);       /* hairline escura sobre claro */
+  --input: rgba(11, 18, 12, .22);
+  --ring: #99cc00;                        /* anel de foco lime (visível no claro) */
 
-  --court: oklch(0.42 0.1 235);
-  --court-line: oklch(0.96 0 0);
+  --court: #0e3a4a;
+  --court-line: #ffffff;
 
-  /* Brand solids for gradients */
-  --brand-lime: #99cc00;
-  --brand-acid: #ccff33;
-  --brand-deep: #006633;
-  --brand-ink: #003333;
-  --brand-sky: #33ccff;
+  /* Acentos */
+  --acid: #ccff33;
+  --lime: #99cc00;
+  --ink: #0b120c;
+  --surface: #c8cbc3;
+  --light: #ffffff;
+  --clay: #ff6831;
+  --sky: #33ccff;
 
-  --gradient-hero: radial-gradient(circle at 15% 15%, oklch(0.78 0.21 128 / 0.28), transparent 55%),
-    radial-gradient(circle at 85% 65%, oklch(0.55 0.12 235 / 0.18), transparent 55%),
-    radial-gradient(circle at 50% 100%, oklch(0.94 0.22 122 / 0.14), transparent 60%);
-  --shadow-glow: 0 20px 60px -20px oklch(0.78 0.21 128 / 0.55);
-  --shadow-soft: 0 12px 40px -16px oklch(0 0 0 / 0.6);
+  /* Motion (ver design-system/tokens.css) */
+  --on-ease:          cubic-bezier(.625, .05, 0, 1);   /* assinatura */
+  --on-ease-click:    cubic-bezier(.4, 0, .2, 1);
+  --on-ease-expo-io:  cubic-bezier(.87, 0, .13, 1);
+  --on-ease-expo-out: cubic-bezier(.16, 1, .3, 1);
+  --on-dur:      .7s;
+  --on-dur-half: .35s;
+  --on-dur-micro: .18s;
+
+  /* Sombras desligadas — profundidade é cor e escala, nunca elevação */
+  --shadow-glow: none;
+  --shadow-soft: none;
 }
 
 @layer base {
@@ -94,18 +125,129 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    font-weight: 700;                 /* 700 é a voz da marca */
     -webkit-font-smoothing: antialiased;
   }
-  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.02em; }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.03em;
+    line-height: .9;
+  }
+  /* Dados densos e campos voltam a 500 para legibilidade */
+  table, input, select, textarea, [data-density="data"] { font-weight: 500; }
+
+  /* Foco visível universal — inegociável */
+  :is(a, button, input, select, textarea, [role="button"], [tabindex]):focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+    transition: box-shadow var(--on-dur-micro) var(--on-ease);
+  }
 }
 
-@utility hero-bg {
-  background-image: var(--gradient-hero);
-}
-@utility shadow-glow { box-shadow: var(--shadow-glow); }
-@utility shadow-soft { box-shadow: var(--shadow-soft); }
+/* ===== Superfícies e utilities do DS ===== */
 
-/* Bouncing ball */
+/* hero-bg agora é plano (sem gradiente radial decorativo) */
+@utility hero-bg { background-color: var(--background); }
+@utility shadow-glow { box-shadow: none; }
+@utility shadow-soft { box-shadow: none; }
+
+/* Papéis tipográficos — a página usa papel, não tamanho avulso */
+@utility type-display {
+  font-size: clamp(3.5rem, 11vw, 11.25rem);
+  line-height: .8; letter-spacing: -.05em; font-weight: 700;
+}
+@utility type-h1 {
+  font-size: clamp(2rem, 3.2vw, 3rem);
+  line-height: .9; letter-spacing: -.03em; font-weight: 700;
+}
+@utility type-h2 { font-size: 1.5rem; line-height: .9; letter-spacing: -.03em; font-weight: 700; }
+@utility type-h3 { font-size: 1.125rem; line-height: .95; font-weight: 700; }
+@utility type-eyebrow {
+  font-size: .8125rem; text-transform: uppercase; letter-spacing: .04em;
+  font-weight: 700; color: var(--muted-foreground);
+}
+@utility type-body { font-size: 1rem; line-height: 1.2; }
+@utility type-small { font-size: .875rem; line-height: 1.2; }
+@utility type-micro { font-size: .75rem; line-height: 1.1; letter-spacing: .02em; }
+@utility type-data { font-weight: 500; font-variant-numeric: tabular-nums; }
+
+/* Planos (o "card" do DS) — fundo a 30%, sem borda */
+@utility plane { background: color-mix(in oklab, var(--card) 30%, transparent); border-radius: 0; padding: 1.25rem; }
+@utility plane-hero { padding: 2rem; }
+@utility plane-compact { padding: .75rem; }
+@utility plane-inverse { background: var(--foreground); color: var(--background); }
+@utility hairline-t { border-top: 1px solid var(--border); }
+@utility hairline-b { border-bottom: 1px solid var(--border); }
+
+/* Ritmo de página — um só padrão para os dois shells */
+@utility page-app {
+  max-width: 72rem; margin-inline: auto;
+  padding-inline: 1rem; padding-block: 3rem;
+}
+@utility stack-app { display: flex; flex-direction: column; gap: 1rem; }
+
+/* ============================================================================
+ * MOTION — arranque lento, chegada firme (easing assinatura)
+ * ========================================================================== */
+
+/* Entrada de rota/conteúdo do app — reaproveita o antigo .animate-float-in,
+   agora afinado ao DS (rise curto, .35s, ease assinatura). */
+@keyframes float-in {
+  from { opacity: 0; transform: translateY(.75rem); }
+  to   { opacity: 1; transform: none; }
+}
+.animate-float-in { animation: float-in var(--on-dur-half) var(--on-ease) both; }
+
+/* Reveal on-scroll (landing) */
+[data-reveal] {
+  opacity: 0; transform: translateY(1.5rem);
+  transition: opacity var(--on-dur) var(--on-ease), transform var(--on-dur) var(--on-ease);
+}
+[data-reveal].is-in { opacity: 1; transform: none; }
+
+/* Press/hover padrão dos controles — .btn-bounce (usado em toda a base)
+   ganha a micro-interação do DS: hover cresce de leve, clique afunda. */
+.btn-bounce {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--on-dur-micro) var(--on-ease-click),
+              filter var(--on-dur-micro) var(--on-ease-click),
+              background-color var(--on-dur-half) var(--on-ease),
+              color var(--on-dur-half) var(--on-ease);
+}
+/* Hover não move elementos — apenas cor/BG. O "press" (clique) mantém o feedback tátil. */
+.btn-bounce:active { transform: scale(.955); filter: brightness(.94); }
+button, a, [role="button"], input, select, textarea { touch-action: manipulation; }
+
+/* Botão letra-a-letra (landing) */
+[data-char-button] { overflow: clip; }
+.on-char { display: inline-block; position: relative; overflow: clip; }
+.on-char span { display: inline-block; transition: translate .5s calc((var(--char) - 1) * .02s) var(--on-ease); }
+.on-char span:last-child { position: absolute; left: 0; top: 0; translate: 0 100%; }
+:is([data-char-button]:hover, [data-char-button]:focus-visible) .on-char span { translate: 0 -100%; }
+:is([data-char-button]:hover, [data-char-button]:focus-visible) .on-char span:last-child { translate: 0 0; }
+
+/* Marquee (landing) — o JS (design-system/motion.js) preenche e clona o bloco */
+[data-marquee] { display: flex; overflow: clip; gap: 2rem; white-space: nowrap; }
+[data-marquee] > * { display: flex; gap: 2rem; align-items: center; flex-shrink: 0; }
+.on-marquee-run > * { animation: on-marquee var(--on-marquee-dur, 24s) linear infinite; }
+.on-marquee-paused > * { animation-play-state: paused; }
+@keyframes on-marquee { to { transform: translateX(calc(-100% - 2rem)); } }
+
+/* Skeleton — sem flash de vazio */
+.on-skeleton {
+  position: relative; overflow: clip;
+  background: var(--accent); color: transparent !important;
+  pointer-events: none; user-select: none;
+}
+.on-skeleton::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 20%, var(--accent) 50%, transparent 80%);
+  animation: on-shimmer 1.4s var(--on-ease) infinite;
+}
+@keyframes on-shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+/* Animações do universo da quadra (landing/dashboard) — preservadas */
 @keyframes ball-bounce {
   0%, 100% { transform: translateY(0) scale(1, 1); }
   45% { transform: translateY(0) scale(1, 1); }
@@ -127,65 +269,53 @@
 @keyframes spin-slow { to { transform: rotate(360deg); } }
 .animate-spin-slow { animation: spin-slow 3s linear infinite; }
 
-/* Tennis player swing — wind-up, snap-through, recover. Smooth and athletic. */
 @keyframes tennis-swing {
   0%   { transform: rotate(-4deg) translateY(0); }
-  25%  { transform: rotate(-10deg) translateY(-2px); }   /* prepara o golpe */
-  45%  { transform: rotate(-12deg) translateY(-3px); }   /* segura no topo */
-  55%  { transform: rotate(6deg)  translateY(2px);  }    /* raquetada */
-  70%  { transform: rotate(3deg)  translateY(0);    }    /* follow-through */
-  100% { transform: rotate(-4deg) translateY(0); }       /* volta */
+  25%  { transform: rotate(-10deg) translateY(-2px); }
+  45%  { transform: rotate(-12deg) translateY(-3px); }
+  55%  { transform: rotate(6deg)  translateY(2px);  }
+  70%  { transform: rotate(3deg)  translateY(0);    }
+  100% { transform: rotate(-4deg) translateY(0); }
 }
 .animate-tennis-swing { animation: tennis-swing 3.2s cubic-bezier(0.45, 0, 0.25, 1) infinite; }
 
-/* Landing-page tennis ball — single ball launched by the swing video.
-   Stays hidden during the wind-up, appears with a quick "impact pop" at the
-   contact frame, then flies right→left across the hero passing behind the
-   headline text and exits off-screen. Timed to the 5s video loop. */
 @keyframes ball-fly {
-  0%, 52% {
-    transform: translate(880px, -30px) scale(0.4);
-    opacity: 0;
-  }
-  56% {
-    transform: translate(860px, -40px) scale(1.25);
-    opacity: 1;
-  }
-  62% {
-    transform: translate(780px, -55px) scale(1);
-    opacity: 1;
-  }
-  82% {
-    transform: translate(350px, -90px) scale(0.95);
-    opacity: 1;
-  }
-  96% {
-    transform: translate(-100px, -20px) scale(0.8);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(-100px, -20px) scale(0.8);
-    opacity: 0;
-  }
+  0%, 52%  { transform: translate(880px, -30px) scale(0.4); opacity: 0; }
+  56%      { transform: translate(860px, -40px) scale(1.25); opacity: 1; }
+  62%      { transform: translate(780px, -55px) scale(1); opacity: 1; }
+  82%      { transform: translate(350px, -90px) scale(0.95); opacity: 1; }
+  96%      { transform: translate(-100px, -20px) scale(0.8); opacity: 1; }
+  100%     { transform: translate(-100px, -20px) scale(0.8); opacity: 0; }
 }
 .animate-ball-fly { animation: ball-fly 5s cubic-bezier(0.2, 0.5, 0.4, 1) infinite; }
 
-@keyframes float-in {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+/* Range slider — trilho preenchido em tinta (via gradiente inline no elemento)
+   e bolinha (thumb) verde. */
+.on-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 2px;
+  border-radius: 9999px;
+  background: var(--input);
+  outline: none;
+  cursor: pointer;
 }
-.animate-float-in { animation: float-in 0.7s ease-out both; }
-
-/* Button press squish — usa filter/box-shadow para não encolher a área clicável.
-   touch-action: manipulation remove o delay de 300ms em mobile e evita
-   que o primeiro tap seja perdido em hover sticky. */
-.btn-bounce {
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  transition: filter 180ms ease, box-shadow 180ms ease;
+.on-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px; height: 16px;
+  border-radius: 9999px;
+  background: var(--lime);
+  border: none;
+  cursor: pointer;
 }
-.btn-bounce:active { filter: brightness(0.92); }
-button, a, [role="button"], input, select, textarea { touch-action: manipulation; }
+.on-range::-moz-range-thumb {
+  width: 16px; height: 16px;
+  border-radius: 9999px;
+  background: var(--lime);
+  border: none;
+  cursor: pointer;
+}
 
 /* Scrollbars invisíveis até hover */
 * { scrollbar-width: none; scrollbar-color: transparent transparent; }
@@ -196,3 +326,11 @@ button, a, [role="button"], input, select, textarea { touch-action: manipulation
 *:hover::-webkit-scrollbar-thumb { background-color: color-mix(in oklab, var(--foreground) 35%, transparent); background-clip: padding-box; }
 *::-webkit-scrollbar-thumb:hover { background-color: color-mix(in oklab, var(--foreground) 55%, transparent) !important; background-clip: padding-box; }
 
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+  [data-reveal] { opacity: 1; transform: none; }
+}

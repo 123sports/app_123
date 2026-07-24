@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Loader2, Plus, Pencil, Trash2, ImageIcon, X, Save, Store, MessageCircle } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, ImageIcon, X, Save, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
+import { PageHeader } from "@/components/PageHeader";
 
 export const Route = createFileRoute("/_authenticated/admin/loja")({
   component: AdminLojaPage,
@@ -70,30 +71,31 @@ function AdminLojaPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold"><Store className="h-6 w-6 text-primary" /> Loja / Classificados</h1>
-          <p className="text-sm text-muted-foreground">Anuncie equipamentos e acessórios para seus alunos.</p>
-        </div>
-        <button
-          onClick={() => { playPop(); setEditing(null); setShowForm(true); }}
-          className="btn-bounce inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow"
-        >
-          <Plus className="h-4 w-4" /> Novo item
-        </button>
-      </header>
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="Admin · Loja"
+        title="Loja / Classificados"
+        subtitle="Anuncie equipamentos e acessórios para seus alunos."
+        actions={
+          <button
+            onClick={() => { playPop(); setEditing(null); setShowForm(true); }}
+            className="btn-bounce inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground"
+          >
+            <Plus className="h-4 w-4" /> Novo item
+          </button>
+        }
+      />
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
       ) : items.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center text-sm text-muted-foreground">
+        <div className="plane plane-hero border-dashed text-center type-small text-muted-foreground">
           Nenhum item anunciado ainda.
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((it) => (
-            <article key={it.id} className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
+            <article key={it.id} className="flex h-full flex-col overflow-hidden bg-card/30">
               <div className="aspect-video bg-muted">
                 {imgs[it.id] ? (
                   <img src={imgs[it.id]} alt={it.title} className="h-full w-full object-cover" />
@@ -101,21 +103,21 @@ function AdminLojaPage() {
                   <div className="flex h-full items-center justify-center text-muted-foreground"><ImageIcon className="h-8 w-8" /></div>
                 )}
               </div>
-              <div className="space-y-2 p-4">
+              <div className="flex-1 space-y-2 p-4">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold leading-tight">{it.title}</h3>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${it.condition === "novo" ? "bg-primary/15 text-primary" : "bg-secondary text-foreground"}`}>
+                  <h3 className="type-h3">{it.title}</h3>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 type-micro font-semibold ${it.condition === "novo" ? "bg-primary/15 text-primary" : "bg-secondary text-foreground"}`}>
                     {it.condition === "novo" ? "Novo" : "Usado"}
                   </span>
                 </div>
-                {it.category && <p className="text-xs text-muted-foreground">{it.category}</p>}
-                <p className="text-lg font-bold text-primary">{(it.price_cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                {it.category && <p className="type-micro text-muted-foreground">{it.category}</p>}
+                <p className="type-data text-lg font-bold text-primary">{(it.price_cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
                 {it.track_stock && (
-                  <p className={`text-xs font-medium ${(it.stock_quantity ?? 0) > 0 ? "text-muted-foreground" : "text-destructive"}`}>
+                  <p className={`type-micro type-data font-medium ${(it.stock_quantity ?? 0) > 0 ? "text-muted-foreground" : "text-destructive"}`}>
                     Estoque: {it.stock_quantity ?? 0} un.
                   </p>
                 )}
-                {!it.active && <p className="text-xs font-medium text-muted-foreground">• Inativo</p>}
+                {!it.active && <p className="type-micro font-medium text-muted-foreground">• Inativo</p>}
                 <div className="flex flex-wrap gap-2 pt-2">
                   <button onClick={() => { setEditing(it); setShowForm(true); }} className="btn-bounce inline-flex items-center gap-1 rounded-full border border-border bg-secondary px-3 py-1.5 text-xs"><Pencil className="h-3 w-3" /> Editar</button>
                   <button onClick={() => toggleActive(it)} className="btn-bounce rounded-full border border-border bg-secondary px-3 py-1.5 text-xs">{it.active ? "Desativar" : "Ativar"}</button>
@@ -196,9 +198,9 @@ function ItemForm({ initial, onClose, onSaved }: { initial: Item | null; onClose
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 backdrop-blur sm:items-center" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-border bg-card p-6 shadow-soft sm:rounded-3xl">
+      <div onClick={(e) => e.stopPropagation()} className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-border bg-card p-6 sm:rounded-3xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{initial ? "Editar item" : "Novo item"}</h2>
+          <h2 className="type-h3">{initial ? "Editar item" : "Novo item"}</h2>
           <button onClick={onClose} className="rounded-full p-2 hover:bg-secondary"><X className="h-4 w-4" /></button>
         </div>
         <div className="space-y-3">
@@ -237,7 +239,7 @@ function ItemForm({ initial, onClose, onSaved }: { initial: Item | null; onClose
               <input value={stock} onChange={(e) => setStock(e.target.value.replace(/[^\d]/g, ""))} className="input" inputMode="numeric" placeholder="0" />
             </Field>
           )}
-          <button onClick={save} disabled={saving} className="btn-bounce mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow disabled:opacity-60">
+          <button onClick={save} disabled={saving} className="btn-bounce mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar
           </button>
         </div>

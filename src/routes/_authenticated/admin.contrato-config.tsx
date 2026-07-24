@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Loader2, Save, Settings } from "lucide-react";
+import { Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PageHeader } from "@/components/PageHeader";
 
 export const Route = createFileRoute("/_authenticated/admin/contrato-config")({
   component: AdminContratoConfig,
@@ -58,7 +59,7 @@ function AdminContratoConfig() {
       if (error) throw error;
       toast.success("Configurações salvas. Novos contratos já usarão esses valores.");
     } catch (e: any) {
-      toast.error(e.message);
+      toast.error(e?.message ?? "Não foi possível salvar as configurações. Tente de novo.");
     } finally {
       setSaving(false);
     }
@@ -67,21 +68,18 @@ function AdminContratoConfig() {
   if (loading) return <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>;
 
   return (
-    <div className="space-y-6 animate-float-in max-w-3xl">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Settings className="h-7 w-7 text-primary" /> Configurações do Contrato
-        </h1>
-        <p className="text-muted-foreground">
-          Esses valores aparecem automaticamente nas cláusulas do contrato de aulas (cancelamento, pagamento, foro).
-        </p>
-      </header>
+    <div className="space-y-4 animate-float-in max-w-3xl">
+      <PageHeader
+        eyebrow="Admin · Contrato"
+        title="Configurações do Contrato"
+        subtitle="Esses valores aparecem automaticamente nas cláusulas do contrato de aulas (cancelamento, pagamento, foro)."
+      />
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Cancelamento e reposição</CardTitle>
+        <CardHeader><CardTitle className="type-h3">Cancelamento e reposição</CardTitle>
           <CardDescription>Cláusula 8 do contrato.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2">
+        <CardContent className="grid gap-4 md:grid-cols-2">
           <div>
             <Label>Prazo mínimo para cancelar aula sem cobrança</Label>
             <Input value={cfg.cancel_window} onChange={(e) => upd("cancel_window", e.target.value)} placeholder="ex.: 12 horas" />
@@ -94,10 +92,10 @@ function AdminContratoConfig() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Pagamento e inadimplência</CardTitle>
+        <CardHeader><CardTitle className="type-h3">Pagamento e inadimplência</CardTitle>
           <CardDescription>Cláusula 9 do contrato.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2">
+        <CardContent className="grid gap-4 md:grid-cols-2">
           <div>
             <Label>Multa por atraso (%)</Label>
             <Input type="number" step="0.01" value={cfg.late_fee_pct} onChange={(e) => upd("late_fee_pct", Number(e.target.value))} />
@@ -122,10 +120,10 @@ function AdminContratoConfig() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Foro</CardTitle>
+        <CardHeader><CardTitle className="type-h3">Foro</CardTitle>
           <CardDescription>Cláusula 22 do contrato.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2">
+        <CardContent className="grid gap-4 md:grid-cols-2">
           <div>
             <Label>Cidade</Label>
             <Input value={cfg.foro_city} onChange={(e) => upd("foro_city", e.target.value)} />

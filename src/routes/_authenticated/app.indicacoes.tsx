@@ -4,6 +4,7 @@ import { Copy, Share2, Gift, Users, Loader2, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
+import { PageHeader } from "@/components/PageHeader";
 
 export const Route = createFileRoute("/_authenticated/app/indicacoes")({
   component: ReferralsPage,
@@ -81,36 +82,33 @@ function ReferralsPage() {
   const progress = nextAt ? Math.min(100, Math.round((total / nextAt) * 100)) : 100;
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="flex items-center gap-2 text-2xl font-bold">
-          <Gift className="h-6 w-6 text-primary" /> Indique e ganhe desconto
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Quanto mais amigos você trouxer, maior o seu desconto nas aulas.
-        </p>
-      </header>
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="Indicações"
+        title="Indique e ganhe desconto"
+        subtitle="Quanto mais amigos você trouxer, maior o seu desconto nas aulas."
+      />
 
-      <section className="rounded-3xl border border-border bg-card p-6 shadow-soft">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Seu código</p>
+      <section className="plane plane-hero">
+        <p className="type-eyebrow">Seu código</p>
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <span className="rounded-2xl bg-primary/10 px-5 py-3 text-2xl font-bold tracking-widest text-primary">
+          <span className="rounded-2xl bg-primary/10 px-5 py-3 text-2xl font-bold tracking-widest text-primary type-data">
             {code}
           </span>
-          <button onClick={copyCode} className="btn-bounce inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm hover:bg-secondary">
+          <button onClick={copyCode} className="btn-bounce inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm hover:bg-accent">
             <Copy className="h-4 w-4" /> Copiar código
           </button>
-          <button onClick={copyLink} className="btn-bounce inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm hover:bg-secondary">
+          <button onClick={copyLink} className="btn-bounce inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2 text-sm hover:bg-accent">
             <Copy className="h-4 w-4" /> Copiar link
           </button>
-          <button onClick={share} className="btn-bounce inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-glow">
+          <button onClick={share} className="btn-bounce inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
             <Share2 className="h-4 w-4" /> Compartilhar
           </button>
         </div>
-        <p className="mt-3 break-all text-xs text-muted-foreground">{shareUrl}</p>
+        <p className="mt-3 break-all type-micro text-muted-foreground">{shareUrl}</p>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid auto-rows-fr gap-4 md:grid-cols-3">
         <Stat icon={Users} label="Amigos indicados" value={total.toString()} />
         <Stat icon={Trophy} label="Desconto atual" value={`${status?.current_discount ?? 0}%`} highlight />
         <Stat
@@ -121,10 +119,10 @@ function ReferralsPage() {
       </section>
 
       {nextAt && (
-        <section className="rounded-2xl border border-border bg-card p-5">
+        <section className="plane">
           <div className="mb-2 flex items-center justify-between text-sm">
             <span className="font-medium">Progresso até o próximo nível</span>
-            <span className="text-muted-foreground">{total}/{nextAt}</span>
+            <span className="text-muted-foreground type-data">{total}/{nextAt}</span>
           </div>
           <div className="h-3 overflow-hidden rounded-full bg-secondary">
             <div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} />
@@ -133,23 +131,23 @@ function ReferralsPage() {
       )}
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Níveis de recompensa</h2>
-        <div className="grid gap-3 md:grid-cols-3">
+        <h2 className="mb-3 type-h2">Níveis de recompensa</h2>
+        <div className="grid auto-rows-fr gap-4 md:grid-cols-3">
           {rewards.map((r) => {
             const unlocked = total >= r.min_referrals;
             return (
               <div
                 key={r.id}
-                className={`rounded-2xl border p-5 transition ${
-                  unlocked ? "border-primary bg-primary/10" : "border-border bg-card opacity-80"
+                className={`plane h-full transition ${
+                  unlocked ? "border-primary bg-primary/10" : "opacity-80"
                 }`}
               >
-                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="type-eyebrow">
                   {r.label}
                 </div>
-                <div className="mt-2 text-3xl font-bold">{r.discount_percent}%</div>
-                <p className="text-xs text-muted-foreground">de desconto</p>
-                <p className="mt-3 text-xs">
+                <div className="mt-2 text-3xl font-bold type-data">{r.discount_percent}%</div>
+                <p className="type-micro text-muted-foreground">de desconto</p>
+                <p className="mt-3 type-small">
                   {unlocked ? "✅ Desbloqueado" : `Indique ${r.min_referrals} amigos`}
                 </p>
               </div>
@@ -159,17 +157,17 @@ function ReferralsPage() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Quem entrou pelo seu código</h2>
+        <h2 className="mb-3 type-h2">Quem entrou pelo seu código</h2>
         {people.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
+          <p className="plane border-dashed text-center type-small text-muted-foreground">
             Nenhuma indicação ainda. Compartilhe seu código e comece a economizar!
           </p>
         ) : (
-          <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+          <ul className="divide-y divide-border overflow-hidden bg-card/30">
             {people.map((p) => (
               <li key={p.id} className="flex items-center justify-between px-4 py-3 text-sm">
                 <span className="font-medium">{p.full_name ?? "Aluno"}</span>
-                <span className="text-xs text-muted-foreground">
+                <span className="type-micro text-muted-foreground type-data">
                   {new Date(p.created_at).toLocaleDateString("pt-BR")}
                 </span>
               </li>
@@ -185,10 +183,10 @@ function Stat({
   icon: Icon, label, value, highlight,
 }: { icon: any; label: string; value: string; highlight?: boolean }) {
   return (
-    <div className={`rounded-2xl border p-5 ${highlight ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card"}`}>
+    <div className={`plane h-full ${highlight ? "border-primary bg-primary text-primary-foreground" : ""}`}>
       <Icon className="h-5 w-5 opacity-80" />
-      <div className="mt-2 text-3xl font-bold">{value}</div>
-      <p className={`text-xs ${highlight ? "opacity-90" : "text-muted-foreground"}`}>{label}</p>
+      <div className="mt-2 text-3xl font-bold type-data">{value}</div>
+      <p className={`type-small ${highlight ? "opacity-90" : "text-muted-foreground"}`}>{label}</p>
     </div>
   );
 }

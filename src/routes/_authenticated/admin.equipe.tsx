@@ -1,9 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Copy, Plus, Trash2, ShieldCheck, GraduationCap, User as UserIcon } from "lucide-react";
+import { Copy, Plus, Trash2, ShieldCheck, GraduationCap, User as UserIcon, Users, UserCog } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { PageHeader } from "@/components/PageHeader";
+import { ViewTabs } from "@/components/ViewTabs";
+import { CoachProfilesPanel } from "./admin.coach-perfis";
 
 export const Route = createFileRoute("/_authenticated/admin/equipe")({
   component: AdminEquipe,
@@ -12,6 +15,28 @@ export const Route = createFileRoute("/_authenticated/admin/equipe")({
 const MASTER_EMAIL = "bruno@oddrive.com.br";
 
 function AdminEquipe() {
+  const [tab, setTab] = useState<"membros" | "coaches">("membros");
+  return (
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="Admin · Equipe"
+        title="Equipe"
+        subtitle="Convites, membros e as fichas dos coaches usadas nos contratos."
+      />
+      <ViewTabs
+        tabs={[
+          { key: "membros", label: "Membros & convites", icon: Users },
+          { key: "coaches", label: "Perfis dos coaches", icon: UserCog },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
+      {tab === "membros" ? <TeamPanel /> : <CoachProfilesPanel />}
+    </div>
+  );
+}
+
+function TeamPanel() {
   const [isMaster, setIsMaster] = useState(false);
   const [invites, setInvites] = useState<any[]>([]);
   const [team, setTeam] = useState<any[]>([]);
@@ -45,7 +70,7 @@ function AdminEquipe() {
     const { error } = await supabase.from("staff_invites").insert({
       email: email.toLowerCase(), role, invited_by: u.user.id,
     });
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível criar o convite. Tente de novo.");
     setEmail("");
     toast.success("Convite criado");
     load();
@@ -69,15 +94,10 @@ function AdminEquipe() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Equipe</h1>
-        <p className="text-muted-foreground">Convide professores e admins. Cada um cria seu perfil ao aceitar.</p>
-      </div>
-
+    <div className="space-y-4">
       {isMaster ? (
-        <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-          <h2 className="mb-3 font-semibold">Novo convite</h2>
+        <section className="plane">
+          <h2 className="type-h3 mb-3">Novo convite</h2>
           <div className="grid gap-2 sm:grid-cols-[1fr_160px_auto]">
             <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail" type="email"
               className="rounded-md border border-input bg-background px-3 py-2 text-sm" />
@@ -86,28 +106,28 @@ function AdminEquipe() {
               <option value="professor">Professor</option>
               <option value="admin">Administrador</option>
             </select>
-            <button onClick={invite} className="btn-bounce inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
+            <button onClick={invite} className="btn-bounce inline-flex items-center gap-1 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
               <Plus className="h-4 w-4" /> Criar convite
             </button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="type-small mt-2 text-muted-foreground">
             Copie e envie o link para o convidado. O envio automático por e-mail pode ser ativado depois.
           </p>
         </section>
       ) : (
-        <section className="rounded-2xl border border-border bg-card p-5 text-sm text-muted-foreground shadow-soft">
+        <section className="plane type-small text-muted-foreground">
           Apenas o administrador master pode convidar ou aprovar novos membros da equipe.
         </section>
       )}
 
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-        <h2 className="mb-3 font-semibold">Convites</h2>
+      <section className="plane">
+        <h2 className="type-h3 mb-3">Convites</h2>
         <ul className="divide-y divide-border text-sm">
           {invites.map((i) => (
             <li key={i.id} className="flex flex-wrap items-center gap-3 py-3">
               <div className="flex-1 min-w-[200px]">
                 <div className="font-medium">{i.email}</div>
-                <div className="text-xs text-muted-foreground">
+                <div className="type-small text-muted-foreground">
                   {i.role} · expira {format(new Date(i.expires_at), "dd/MM/yyyy")}
                 </div>
               </div>
@@ -117,7 +137,7 @@ function AdminEquipe() {
               }`}>{i.status}</span>
               {i.status === "pendente" && (
                 <>
-                  <button onClick={() => copyLink(i.token)} className="btn-bounce inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs">
+                  <button onClick={() => copyLink(i.token)} className="btn-bounce inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs hover:bg-accent">
                     <Copy className="h-3 w-3" /> Copiar link
                   </button>
                   {isMaster && (
@@ -133,15 +153,15 @@ function AdminEquipe() {
         </ul>
       </section>
 
-      <section className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-        <h2 className="mb-3 font-semibold">Membros atuais</h2>
+      <section className="plane">
+        <h2 className="type-h3 mb-3">Membros atuais</h2>
         <ul className="divide-y divide-border text-sm">
           {team.map((t) => (
             <li key={`${t.user_id}-${t.role}`} className="flex items-center gap-3 py-3">
               {t.role === "admin" ? <ShieldCheck className="h-4 w-4 text-primary" /> : t.role === "professor" ? <GraduationCap className="h-4 w-4 text-primary" /> : <UserIcon className="h-4 w-4" />}
               <div className="flex-1">
                 <div className="font-medium">{t.profile?.full_name ?? "Sem nome"}</div>
-                <div className="text-xs text-muted-foreground">{t.profile?.phone ?? ""}</div>
+                <div className="type-small text-muted-foreground">{t.profile?.phone ?? ""}</div>
               </div>
               <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">{t.role}</span>
               {isMaster && (

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
 import { format } from "date-fns";
+import { PageHeader } from "@/components/PageHeader";
 
 export const Route = createFileRoute("/_authenticated/admin/bloqueios")({
   component: AdminBloqueios,
@@ -85,7 +86,7 @@ function AdminBloqueios() {
     }));
     const { error } = await (supabase as any).from("blocked_slots").insert(inserts);
     setLoading(false);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível criar o bloqueio. Tente de novo.");
     toast.success(`${hours.size} horário${hours.size > 1 ? "s" : ""} bloqueado${hours.size > 1 ? "s" : ""}`);
     setHours(new Set());
     setReason("");
@@ -95,23 +96,24 @@ function AdminBloqueios() {
   const remove = async (id: string) => {
     playPop();
     const { error } = await (supabase as any).from("blocked_slots").delete().eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível remover o bloqueio. Tente de novo.");
     setRows((rs) => rs.filter((r) => r.id !== id));
     toast.success("Bloqueio removido");
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Bloqueios de horário</h1>
-        <p className="text-muted-foreground">Trave horários quando a quadra estiver indisponível (manutenção, compromisso, evento).</p>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="Admin · Bloqueios"
+        title="Bloqueios de horário"
+        subtitle="Trave horários quando a quadra estiver indisponível (manutenção, compromisso, evento)."
+      />
 
-      <div className="rounded-3xl border border-border bg-card p-6 shadow-soft">
+      <div className="plane">
         <div className="grid gap-4 md:grid-cols-[200px_1fr]">
           <div className="space-y-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Data</label>
+              <label className="type-eyebrow mb-1 block">Data</label>
               <input
                 type="date"
                 value={date}
@@ -121,7 +123,7 @@ function AdminBloqueios() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Aplica a</label>
+              <label className="type-eyebrow mb-1 block">Aplica a</label>
               <select
                 value={profId}
                 onChange={(e) => setProfId(e.target.value)}
@@ -134,7 +136,7 @@ function AdminBloqueios() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Motivo (opcional)</label>
+              <label className="type-eyebrow mb-1 block">Motivo (opcional)</label>
               <input
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -146,13 +148,13 @@ function AdminBloqueios() {
           </div>
 
           <div>
-            <div className="mb-2 text-xs font-medium text-muted-foreground">Selecione os horários</div>
+            <div className="type-eyebrow mb-2">Selecione os horários</div>
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
               {HOURS.map((h) => (
                 <button
                   key={h}
                   onClick={() => toggle(h)}
-                  className={`btn-bounce rounded-lg border px-2 py-2 text-xs font-semibold ${hours.has(h) ? "border-destructive bg-destructive text-destructive-foreground" : "border-border bg-background hover:border-destructive"}`}
+                  className={`btn-bounce type-data rounded-full border px-2 py-2 text-xs font-semibold ${hours.has(h) ? "border-destructive bg-destructive text-destructive-foreground" : "border-border bg-secondary hover:border-destructive"}`}
                 >
                   {String(h).padStart(2, "0")}:00
                 </button>
@@ -161,7 +163,7 @@ function AdminBloqueios() {
             <button
               onClick={create}
               disabled={loading || hours.size === 0}
-              className="btn-bounce mt-4 inline-flex items-center gap-2 rounded-xl bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground shadow-glow disabled:opacity-60"
+              className="btn-bounce mt-4 inline-flex items-center gap-2 rounded-full bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground disabled:opacity-60"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               Bloquear {hours.size > 0 ? `${hours.size} horário${hours.size > 1 ? "s" : ""}` : ""}
@@ -170,10 +172,10 @@ function AdminBloqueios() {
         </div>
       </div>
 
-      <div className="rounded-3xl border border-border bg-card p-6 shadow-soft">
-        <h2 className="mb-4 text-lg font-semibold">Bloqueios ativos</h2>
+      <div className="plane">
+        <h2 className="type-h2 mb-4">Bloqueios ativos</h2>
         {rows.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Nenhum bloqueio cadastrado.</p>
+          <p className="type-small py-8 text-center text-muted-foreground">Nenhum bloqueio cadastrado.</p>
         ) : (
           <ul className="divide-y divide-border">
             {rows.map((r) => (
@@ -181,16 +183,16 @@ function AdminBloqueios() {
                 <div className="flex items-center gap-3">
                   <Lock className="h-4 w-4 text-destructive" />
                   <div>
-                    <div className="text-sm font-medium">
+                    <div className="type-data text-sm font-medium">
                       {format(new Date(r.block_date + "T00:00:00"), "dd/MM/yyyy")} · {String(r.start_hour).padStart(2, "0")}:00
                     </div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="type-small text-muted-foreground">
                       {r.professor_id ? `Só ${names[r.professor_id] ?? "professor"}` : "Quadra toda"}
                       {r.reason ? ` · ${r.reason}` : ""}
                     </div>
                   </div>
                 </div>
-                <button onClick={() => remove(r.id)} className="btn-bounce rounded-md border border-border p-2 hover:bg-destructive/10">
+                <button onClick={() => remove(r.id)} className="btn-bounce rounded-full border border-border p-2 hover:bg-destructive/10">
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </button>
               </li>

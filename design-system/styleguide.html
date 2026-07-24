@@ -1,0 +1,735 @@
+<title>ON COURT — Design System On Tennis</title>
+<style>
+  /* ============ TOKENS (espelho de tokens.css) ============ */
+  :root {
+    --ink: #0b120c;
+    --surface: #c8cbc3;
+    --light: #ffffff;
+    --button: #10150f;
+    --ink-60: rgba(11,18,12,.6);
+    --ink-30: rgba(11,18,12,.3);
+    --ink-20: rgba(11,18,12,.2);
+    --ink-10: rgba(11,18,12,.1);
+    --ink-5: rgba(11,18,12,.05);
+    --light-70: rgba(255,255,255,.7);
+    --light-20: rgba(255,255,255,.2);
+    --light-10: rgba(255,255,255,.1);
+    --light-5: rgba(255,255,255,.05);
+    --acid: #ccff33;
+    --lime: #99cc00;
+    --clay: #ff6831;
+    --sky: #33ccff;
+    --danger: #e5484d;
+    --night-panel: #141a13;
+
+    --font: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+    --ease: cubic-bezier(.625,.05,0,1);
+    --ease-click: cubic-bezier(.4,0,.2,1);
+    --ease-natural: cubic-bezier(.32,.12,.2,1);
+    --ease-focus: cubic-bezier(.32,.72,0,1);
+    --ease-expo-io: cubic-bezier(.87,0,.13,1);
+    --ease-expo-out: cubic-bezier(.16,1,.3,1);
+    --dur: .7s;
+    --dur-half: .35s;
+    --char-stagger: .02s;
+
+    --pill: 999px;
+    --sec: 7.5rem;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font);
+    font-weight: 700;
+    background: var(--surface);
+    color: var(--ink);
+    line-height: 1.2;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 76rem; margin-inline: auto; padding-inline: 1.25rem; }
+  section { padding-block: var(--sec); }
+  h1,h2,h3 { letter-spacing: -.03em; line-height: .9; text-wrap: balance; }
+
+  a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--lime);
+  }
+  .night :is(a,button,input,[tabindex]):focus-visible {
+    box-shadow: 0 0 0 2px var(--ink), 0 0 0 4px var(--acid);
+  }
+
+  /* ============ PAPÉIS TIPOGRÁFICOS ============ */
+  .t-display { font-size: clamp(3.5rem, 11vw, 11.25rem); line-height: .8; letter-spacing: -.05em; }
+  .t-h1 { font-size: clamp(2rem, 3.2vw, 3rem); }
+  .t-h2 { font-size: 1.5rem; }
+  .t-h3 { font-size: 1.125rem; }
+  .t-eyebrow { font-size: .8125rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-60); }
+  .night .t-eyebrow { color: var(--light-70); }
+  .t-body { font-size: 1rem; }
+  .t-small { font-size: .875rem; }
+  .t-micro { font-size: .75rem; letter-spacing: .04em; }
+  .t-data { font-weight: 500; font-variant-numeric: tabular-nums; }
+  .muted { color: var(--ink-60); }
+  .night .muted { color: var(--light-70); }
+
+  /* ============ NAV ============ */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .8rem 1.25rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--ink);
+  }
+  nav .logo { font-size: 1.05rem; letter-spacing: -.02em; }
+  nav .logo em { font-style: normal; background: var(--acid); padding: 0 .3em; }
+  nav ul { display: flex; gap: 1.25rem; list-style: none; }
+  nav a { color: var(--ink); text-decoration: none; font-size: .875rem; transition: opacity var(--dur) var(--ease); }
+  nav a:hover { opacity: .5; }
+  @media (max-width: 720px) { nav ul { display: none; } }
+
+  /* ============ HERO ============ */
+  .hero { padding: 6.5rem 0 5.5rem; }
+  .hero .t-display { margin: 1.5rem 0 2rem; }
+  .hero .sub { max-width: 46ch; font-size: 1.0125rem; margin-bottom: 2.5rem; }
+  .hero .row { display: flex; gap: .75rem; flex-wrap: wrap; }
+
+  /* ============ BOTÕES ============ */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    min-height: 2.75rem; padding: .75em 1.4em;
+    font: inherit; font-weight: 700; font-size: 1rem;
+    border: none; border-radius: var(--pill); cursor: pointer; text-decoration: none;
+    background: var(--button); color: var(--light);
+    overflow: clip;
+    transition: transform var(--dur-half) var(--ease), background var(--dur-half) var(--ease),
+                color var(--dur-half) var(--ease), filter .18s var(--ease-click);
+  }
+  .btn:hover { transform: scale(1.065); }
+  .btn:active { transform: scale(.955); filter: brightness(.94); }
+  .btn--acid { background: var(--acid); color: var(--ink); }
+  .btn--ghost { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+  .night .btn--ghost { color: var(--light); border-color: var(--light); }
+  .btn--danger { background: var(--danger); color: var(--light); }
+  .btn--sm { min-height: 2.25rem; font-size: .875rem; padding: .5em 1.1em; }
+  .btn[disabled] { opacity: .4; pointer-events: none; }
+
+  /* stagger letra-a-letra */
+  .char-btn { gap: 0; } /* o gap do flex não pode vazar entre as letras */
+  .char { display: inline-block; position: relative; overflow: clip; }
+  .char span { display: inline-block; transition: translate .5s calc((var(--char) - 1) * var(--char-stagger)) var(--ease); }
+  .char span:last-child { position: absolute; left: 0; top: 0; translate: 0 100%; }
+  :is(.btn:hover, .btn:focus-visible, .cta-block:hover) .char span { translate: 0 -100%; }
+  :is(.btn:hover, .btn:focus-visible, .cta-block:hover) .char span:last-child { translate: 0 0; }
+
+  .cta-block {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%; min-height: 8.5rem; margin-top: 2.5rem;
+    border: 1px solid var(--ink); color: var(--ink); text-decoration: none;
+    font-size: clamp(1.4rem, 3.5vw, 2.5rem); letter-spacing: -.02em; text-transform: uppercase;
+    overflow: clip;
+    transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+  }
+  .cta-block:hover { background: var(--ink); color: var(--light); }
+
+  /* ============ REVEAL ============ */
+  [data-reveal] { opacity: 0; transform: translateY(1.5rem); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+  [data-reveal].is-in { opacity: 1; transform: none; }
+
+  /* ============ SEÇÕES ============ */
+  .sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; border-top: 1px solid var(--ink); padding-top: 1rem; margin-bottom: 3rem; flex-wrap: wrap; }
+  .night .sec-head { border-color: var(--light); }
+  .sec-head .num { font-size: .875rem; color: var(--ink-60); }
+  .night .sec-head .num { color: var(--light-70); }
+
+  .night { background: var(--ink); color: var(--light); }
+
+  /* ============ COR ============ */
+  .swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; }
+  .swatch { border: 1px solid var(--ink-20); min-height: 8.5rem; display: flex; flex-direction: column; justify-content: space-between; padding: .75rem; }
+  .swatch .t-micro { opacity: .75; }
+  .pair-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: .75rem; margin-top: 2.5rem; }
+  .pair { padding: 1.25rem; min-height: 7rem; display: flex; flex-direction: column; gap: .35rem; border: 1px solid var(--ink-20); }
+
+  /* ============ TIPO ============ */
+  .spec { display: grid; gap: 0; }
+  .spec > div { display: grid; grid-template-columns: 11rem 1fr; gap: 1.5rem; align-items: baseline; padding: 1.1rem 0; border-bottom: 1px solid var(--light-20); }
+  .spec .meta { font-size: .75rem; font-weight: 500; color: var(--light-70); letter-spacing: .04em; text-transform: uppercase; }
+  @media (max-width: 720px) { .spec > div { grid-template-columns: 1fr; gap: .4rem; } }
+
+  /* ============ ESPAÇO ============ */
+  .gaps { display: flex; flex-direction: column; gap: .9rem; }
+  .gaps .row { display: flex; align-items: center; gap: 1.25rem; }
+  .gaps .bar { height: 1.4rem; background: var(--ink); }
+  .gaps .lbl { width: 11rem; font-size: .75rem; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-60); }
+  .pads { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem; margin-top: 3rem; }
+  .pad-demo { border: 1px solid var(--ink); background: var(--light); }
+  .pad-demo .inner { background: var(--ink-5); border: 1px dashed var(--ink-30); padding: .6rem; font-size: .8125rem; }
+
+  /* ============ MOTION ============ */
+  .ease-lab { display: grid; gap: .5rem; }
+  .ease-row { display: grid; grid-template-columns: 13rem 1fr; gap: 1.25rem; align-items: center; padding: .7rem 0; border-bottom: 1px solid var(--light-10); }
+  .ease-row .meta { font-size: .75rem; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--light-70); }
+  .track { position: relative; height: 2rem; }
+  .track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--light-20); }
+  .ball { position: absolute; top: 50%; left: 0; width: 1.1rem; height: 1.1rem; margin-top: -.55rem; border-radius: 50%; background: var(--acid); }
+  .lab-run .ball { animation: lab-run 1.4s var(--lab-ease, var(--ease)) forwards; }
+  @keyframes lab-run { to { left: calc(100% - 1.1rem); } }
+  @media (max-width: 720px) { .ease-row { grid-template-columns: 1fr; gap: .3rem; } }
+
+  /* pixel reveal */
+  .media-demo { position: relative; overflow: clip; border: 1px solid var(--light-20); min-height: 15rem; display: flex; align-items: flex-end; }
+  .media-demo .art {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 78% 22%, var(--acid) 0 3.2rem, transparent 3.35rem),
+      linear-gradient(var(--light-20) 1px, transparent 1px) 0 0 / 100% 25%,
+      linear-gradient(90deg, var(--light-20) 1px, transparent 1px) 0 0 / 25% 100%,
+      linear-gradient(160deg, #22301f, #0e130e 70%);
+  }
+  .media-demo figcaption { position: relative; z-index: 1; padding: 1.25rem; font-size: .875rem; color: var(--light-70); }
+  .px-panel { position: absolute; inset: 0; z-index: 2; pointer-events: none; display: grid; grid-template-columns: repeat(25,1fr); grid-template-rows: repeat(4,1fr); }
+  .px-cell { background: var(--ink); transition: opacity .35s steps(2, jump-none); }
+  .px-cell.is-off { opacity: 0; }
+
+  /* marquee */
+  .marquee { display: flex; overflow: clip; gap: 2rem; white-space: nowrap; border-block: 1px solid var(--light-20); padding-block: .9rem; margin-top: 3rem; }
+  /* largura do bloco = conteúdo (o JS repete o conjunto até cobrir o container
+     e clona o bloco — dois blocos idênticos = loop sem buraco) */
+  .marquee > div { display: flex; gap: 2rem; align-items: center; flex-shrink: 0; animation: mq var(--mq-dur, 22s) linear infinite; }
+  .marquee span { font-size: 1.35rem; text-transform: uppercase; letter-spacing: -.02em; }
+  .marquee span:nth-child(even) { color: var(--acid); }
+  @keyframes mq { to { transform: translateX(calc(-100% - 2rem)); } }
+
+  /* ============ COMPONENTES ============ */
+  .comp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: .75rem; }
+  .plane { background: var(--night-panel); border: 1px solid var(--light-20); padding: 1.25rem; }
+  .plane h4 { font-size: .8125rem; text-transform: uppercase; letter-spacing: .04em; color: var(--light-70); margin-bottom: 1.1rem; }
+  .stack { display: flex; flex-direction: column; gap: .75rem; }
+  .row-wrap { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+
+  .badge { display: inline-flex; align-items: center; gap: .35em; border-radius: var(--pill); padding: .3em .8em; font-size: .75rem; letter-spacing: .04em; text-transform: uppercase; }
+  .badge--paid { background: var(--acid); color: var(--ink); }
+  .badge--pending { background: var(--clay); color: var(--ink); }
+  .badge--cancel { border: 1px solid var(--light-20); color: var(--light-70); }
+  .badge--ok { border: 1px solid var(--light); color: var(--light); }
+
+  .field { display: flex; flex-direction: column; gap: .45rem; }
+  .field label { font-size: .8125rem; text-transform: uppercase; letter-spacing: .04em; color: var(--light-70); }
+  .field input, .field select {
+    font: inherit; font-weight: 500; font-size: 1rem; color: var(--light);
+    background: var(--ink); border: 1px solid var(--light-20); border-radius: 0;
+    min-height: 2.75rem; padding: 0 .9rem;
+    transition: border-color var(--dur-half) var(--ease);
+  }
+  .field input::placeholder { color: var(--light-70); }
+  .field.err input { border-color: var(--danger); }
+  .field .hint { font-size: .75rem; color: var(--danger); letter-spacing: .04em; }
+
+  .kpi { display: flex; flex-direction: column; gap: .4rem; }
+  .kpi .n { font-size: clamp(2.4rem, 5vw, 3.4rem); line-height: .9; letter-spacing: -.03em; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .kpi .delta { font-size: .875rem; color: var(--acid); }
+  .kpi .delta.down { color: var(--clay); }
+
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; font-weight: 500; color: inherit; /* quirks mode não herda cor em table */ }
+  thead th { text-align: left; font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--light-70); padding: .55rem .6rem; border-bottom: 1px solid var(--light); }
+  tbody td { padding: .7rem .6rem; border-bottom: 1px solid var(--light-10); font-variant-numeric: tabular-nums; }
+  tbody tr { transition: background var(--dur-half) var(--ease); }
+  tbody tr:hover { background: var(--light-5); }
+  .tbl-wrap { overflow-x: auto; }
+
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal div { aspect-ratio: 1; display: flex; align-items: flex-start; justify-content: flex-end; padding: .35rem .45rem; font-size: .75rem; font-weight: 500; border: 1px solid var(--light-10); }
+  .cal .today { border: 1px solid var(--light); }
+  .cal .sel { background: var(--acid); color: var(--ink); font-weight: 700; }
+  .cal .busy { background: var(--light-5); }
+  .cal .blocked { background: repeating-linear-gradient(45deg, transparent 0 4px, var(--light-10) 4px 8px); color: var(--light-70); }
+
+  .toast { display: flex; align-items: center; gap: .8rem; background: var(--light); color: var(--ink); padding: .9rem 1.1rem; border-left: 3px solid var(--lime); font-size: .875rem; }
+  .toast--err { border-color: var(--danger); }
+
+  .ph-demo { border: 1px dashed var(--light-20); padding: 1.25rem; }
+  .ph-demo .t-h1 { margin: .3rem 0 .4rem; }
+
+  .navdemo { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+  .navdemo a { color: var(--light); text-decoration: none; font-size: .875rem; padding: .5em 1em; border-radius: var(--pill); transition: background var(--dur-half) var(--ease), color var(--dur-half) var(--ease); }
+  .navdemo a:hover { background: var(--light-10); }
+  .navdemo a.active { background: var(--acid); color: var(--ink); }
+
+  /* ============ LEIS ============ */
+  .laws { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: .75rem; counter-reset: law; }
+  .law { border: 1px solid var(--ink); padding: 1.25rem; display: flex; gap: 1rem; align-items: baseline; background: var(--light); }
+  .law::before { counter-increment: law; content: counter(law, decimal-leading-zero); font-size: 1.5rem; letter-spacing: -.03em; color: var(--lime); }
+  .law p { font-size: .9375rem; font-weight: 500; line-height: 1.35; }
+  .law p b { font-weight: 700; }
+
+  /* ============ FOOTER ============ */
+  footer { background: var(--ink); color: var(--light); padding: 4rem 1.25rem 2rem; }
+  footer .big { font-size: clamp(3rem, 10vw, 8.5rem); line-height: .8; letter-spacing: -.05em; margin-top: 2.5rem; }
+  footer .big em { font-style: normal; color: var(--acid); }
+  footer .meta { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; font-size: .8125rem; color: var(--light-70); font-weight: 500; }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-reveal] { opacity: 1; transform: none; transition: none; }
+    .char span { transition: none; }
+    .px-panel { display: none; }
+    .marquee > div { animation: none; }
+    .lab-run .ball { animation: none; left: calc(100% - 1.1rem); }
+  }
+</style>
+
+<nav>
+  <div class="logo">ON <em>COURT</em> — design system</div>
+  <ul>
+    <li><a href="#cor">Cor</a></li>
+    <li><a href="#tipo">Tipografia</a></li>
+    <li><a href="#espaco">Espaço</a></li>
+    <li><a href="#motion">Motion</a></li>
+    <li><a href="#comp">Componentes</a></li>
+    <li><a href="#leis">Leis</a></li>
+  </ul>
+</nav>
+
+<header class="hero wrap">
+  <p class="t-eyebrow" data-reveal>On Tennis · sistema de interface · v1.0</p>
+  <h1 class="t-display" data-reveal>ON<br>COURT</h1>
+  <p class="sub" data-reveal>
+    Techno-brutalismo de quadra: tinta sobre saibro-cinza, uma grotesca em peso 700,
+    display gigante, zero sombras — e o verde-ácido da bolinha como único flash.
+    Baseado na engenharia reversa de paulkalkbrenner.net, desenhado para a
+    plataforma On Tennis: landing, app do aluno e admin.
+  </p>
+  <div class="row" data-reveal>
+    <button class="btn char-btn">Reservar horário</button>
+    <button class="btn btn--ghost char-btn">Ver styleguide</button>
+  </div>
+</header>
+
+<!-- ============ COR ============ -->
+<section id="cor" class="wrap">
+  <div class="sec-head">
+    <h2 class="t-h1">Cor</h2>
+    <span class="num">01 — monocromia + flash</span>
+  </div>
+
+  <div class="swatches" data-reveal>
+    <div class="swatch" style="background:var(--ink); color:var(--light)"><span>ink</span><span class="t-micro">#0B120C · texto / superfície NIGHT</span></div>
+    <div class="swatch" style="background:var(--surface)"><span>surface</span><span class="t-micro">#C8CBC3 · saibro-cinza, superfície DAY</span></div>
+    <div class="swatch" style="background:var(--light)"><span>light</span><span class="t-micro">#FFFFFF · panel DAY / texto NIGHT</span></div>
+    <div class="swatch" style="background:var(--acid)"><span>acid</span><span class="t-micro">#CCFF33 · flash — CTA, ativo (NIGHT)</span></div>
+    <div class="swatch" style="background:var(--lime)"><span>lime</span><span class="t-micro">#99CC00 · marca sobre claro (DAY)</span></div>
+    <div class="swatch" style="background:var(--clay); color:var(--ink)"><span>clay</span><span class="t-micro">#FF6831 · pendência, alerta</span></div>
+    <div class="swatch" style="background:var(--sky); color:var(--ink)"><span>sky</span><span class="t-micro">#33CCFF · informativo, raro</span></div>
+    <div class="swatch" style="background:var(--danger); color:var(--light)"><span>danger</span><span class="t-micro">#E5484D · destrutivo / erro</span></div>
+  </div>
+
+  <div class="pair-grid" data-reveal>
+    <div class="pair" style="background:var(--surface)">
+      <span class="t-eyebrow">Modo DAY</span>
+      <span class="t-h3">Tinta sobre saibro</span>
+      <span class="t-small muted">Landing, e-mails, contratos. Contraste ~13:1.</span>
+    </div>
+    <div class="pair" style="background:var(--ink); color:var(--light)">
+      <span class="t-eyebrow" style="color:var(--light-70)">Modo NIGHT</span>
+      <span class="t-h3">Luz sobre tinta</span>
+      <span class="t-small" style="color:var(--light-70)">App do aluno e admin. Contraste ~17:1.</span>
+    </div>
+    <div class="pair" style="background:var(--acid)">
+      <span class="t-eyebrow" style="color:var(--ink-60)">Regra do flash</span>
+      <span class="t-h3">Um acento por tela</span>
+      <span class="t-small" style="color:var(--ink-60)">Acento sempre com tinta por cima. Nunca dois acentos competindo.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TIPOGRAFIA (NIGHT) ============ -->
+<section id="tipo" class="night">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 class="t-h1">Tipografia</h2>
+      <span class="num">02 — uma voz, peso 700</span>
+    </div>
+    <p class="t-small" style="color:var(--light-70); max-width:56ch; margin-bottom:2.5rem" data-reveal>
+      Archivo variável (produção, self-hosted; aqui, fallback grotesco do sistema).
+      700 é a voz da marca; 500 só em dados densos. Oito papéis — nada fora deles,
+      piso absoluto de 12px.
+    </p>
+    <div class="spec" data-reveal>
+      <div><span class="meta">display · clamp 56→180 · lh .8 · ls −.05</span><span class="t-display" style="font-size:clamp(2.6rem,7vw,5.5rem)">Entre em quadra.</span></div>
+      <div><span class="meta">h1 · 32→48 · lh .9 · ls −.03</span><span class="t-h1">Painel administrativo</span></div>
+      <div><span class="meta">h2 · 24</span><span class="t-h2">Próximas reservas</span></div>
+      <div><span class="meta">h3 · 18</span><span class="t-h3">Ponto de equilíbrio</span></div>
+      <div><span class="meta">eyebrow · 13 caps · +.04</span><span class="t-eyebrow" style="color:var(--light-70)">Contratos · Termo padrão</span></div>
+      <div><span class="meta">body · 16 · lh 1.2</span><span class="t-body">Reserve, pague e jogue — tudo direto do seu celular.</span></div>
+      <div><span class="meta">small · 14</span><span class="t-small">Cancelamento com no mínimo 2 horas de antecedência.</span></div>
+      <div><span class="meta">micro · 12 · piso</span><span class="t-micro">AULA TRIO · 17:00 · QUADRA 2</span></div>
+      <div><span class="meta">data · peso 500 · tabular</span><span class="t-data" style="font-size:1.5rem">R$ 3.415,00 · 81 reservas · 142 alunos</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ESPAÇO ============ -->
+<section id="espaco" class="wrap">
+  <div class="sec-head">
+    <h2 class="t-h1">Espaço &amp; forma</h2>
+    <span class="num">03 — duas escalas, dois raios</span>
+  </div>
+
+  <div class="gaps" data-reveal>
+    <div class="row"><span class="lbl">gap-1 · 4</span><span class="bar" style="width:4px"></span></div>
+    <div class="row"><span class="lbl">gap-2 · 8</span><span class="bar" style="width:8px"></span></div>
+    <div class="row"><span class="lbl">gap-3 · 12</span><span class="bar" style="width:12px"></span></div>
+    <div class="row"><span class="lbl">gap-4 · 16</span><span class="bar" style="width:16px"></span></div>
+    <div class="row"><span class="lbl">gap-6 · 24</span><span class="bar" style="width:24px"></span></div>
+    <div class="row"><span class="lbl">gap-8 · 32</span><span class="bar" style="width:32px"></span></div>
+    <div class="row"><span class="lbl">seção app · 24/48</span><span class="bar" style="width:48px; background:var(--lime)"></span></div>
+    <div class="row"><span class="lbl">seção landing · 80–200</span><span class="bar" style="width:120px; background:var(--lime)"></span></div>
+  </div>
+
+  <div class="pads" data-reveal>
+    <div class="pad-demo" style="padding:.75rem"><div class="inner">compact · 12 — célula densa, item de lista</div></div>
+    <div class="pad-demo" style="padding:1.25rem"><div class="inner">card · 20 — o padding padrão de card</div></div>
+    <div class="pad-demo" style="padding:2rem"><div class="inner">hero · 32 — card de destaque</div></div>
+  </div>
+
+  <div class="pair-grid" data-reveal>
+    <div class="pair" style="background:var(--light)">
+      <span class="t-eyebrow">Raio 0</span>
+      <span class="t-h3">Blocos retos</span>
+      <span class="t-small muted">Cards, inputs, tabelas, dialogs. Sem sombra — profundidade é cor.</span>
+    </div>
+    <div class="pair" style="background:var(--light); align-items:flex-start">
+      <span class="t-eyebrow">Raio pill</span>
+      <span class="btn btn--acid btn--sm" style="pointer-events:none">A única curva</span>
+      <span class="t-small muted">Botões, chips, badges, avatares — redondos como a bola.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MOTION (NIGHT) ============ -->
+<section id="motion" class="night">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 class="t-h1">Motion</h2>
+      <span class="num">04 — arranque lento, chegada firme</span>
+    </div>
+
+    <p class="t-small" style="color:var(--light-70); max-width:56ch; margin-bottom:2rem" data-reveal>
+      Easing assinatura <b style="color:var(--acid)">cubic-bezier(.625, .05, 0, 1)</b> em .7s
+      (landing) e .35s (app). Clique nas pistas para comparar os seis easings do sistema.
+    </p>
+
+    <div class="ease-lab" data-reveal>
+      <div class="ease-row" data-ease="cubic-bezier(.625,.05,0,1)"><span class="meta">assinatura · .625,.05,0,1</span><div class="track"><div class="ball"></div></div></div>
+      <div class="ease-row" data-ease="cubic-bezier(.4,0,.2,1)"><span class="meta">click · .4,0,.2,1</span><div class="track"><div class="ball"></div></div></div>
+      <div class="ease-row" data-ease="cubic-bezier(.32,.12,.2,1)"><span class="meta">natural · .32,.12,.2,1</span><div class="track"><div class="ball"></div></div></div>
+      <div class="ease-row" data-ease="cubic-bezier(.32,.72,0,1)"><span class="meta">focus · .32,.72,0,1</span><div class="track"><div class="ball"></div></div></div>
+      <div class="ease-row" data-ease="cubic-bezier(.87,0,.13,1)"><span class="meta">expo-io · menus</span><div class="track"><div class="ball"></div></div></div>
+      <div class="ease-row" data-ease="cubic-bezier(.16,1,.3,1)"><span class="meta">expo-out · saídas</span><div class="track"><div class="ball"></div></div></div>
+    </div>
+    <p class="t-micro" style="color:var(--light-70); margin-top:.8rem">▶ clique numa pista para rodar · duplo clique roda todas</p>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:.75rem; margin-top:3rem">
+      <figure class="media-demo" data-px data-reveal>
+        <div class="art"></div>
+        <figcaption>Revelação pixelada 25×4 — mídia da landing dissolve na cor do fundo. <button class="btn btn--ghost btn--sm" data-px-replay style="margin-left:.6rem">Repetir</button></figcaption>
+      </figure>
+      <div class="plane" data-reveal>
+        <h4>Odometer — KPIs</h4>
+        <div class="stack">
+          <div class="kpi"><span class="t-eyebrow" style="color:var(--light-70)">Receita do mês</span><span class="n" data-odo="3415" data-odo-prefix="R$ "> </span><span class="delta">▲ margem 100%</span></div>
+          <div class="kpi"><span class="t-eyebrow" style="color:var(--light-70)">Alunos</span><span class="n" data-odo="142"> </span><span class="delta down">▼ 3 faltas na semana</span></div>
+          <button class="btn btn--ghost btn--sm" data-odo-replay>Repetir contagem</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="marquee" aria-hidden="true">
+      <div>
+        <span>Reserve</span><span>·</span><span>Jogue</span><span>·</span><span>Evolua</span><span>·</span>
+        <span>On Tennis</span><span>·</span><span>Match aberto</span><span>·</span><span>Aula em grupo</span><span>·</span>
+      </div>
+    </div>
+
+    <div class="tbl-wrap" style="margin-top:3rem" data-reveal>
+      <table>
+        <thead><tr><th>Superfície</th><th>Entra</th><th>Interage</th><th>Proibido</th></tr></thead>
+        <tbody>
+          <tr><td>Landing</td><td>reveal .7s · pixel · display por linha</td><td>char-stagger · marquee · grain · parallax</td><td>—</td></tr>
+          <tr><td>App aluno</td><td>rota .35s · stagger 40ms (máx. 8)</td><td>press .955 · odometer · toasts</td><td>scroll-choreo, pixel, grain</td></tr>
+          <tr><td>Admin</td><td>fade .35s · skeleton</td><td>press · hover wash</td><td>stagger &gt;6 · efeitos de landing</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ COMPONENTES (NIGHT panel) ============ -->
+<section id="comp" class="night" style="background:#0e130e">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 class="t-h1">Componentes</h2>
+      <span class="num">05 — estados completos, sempre</span>
+    </div>
+
+    <div class="comp-grid">
+      <div class="plane" data-reveal>
+        <h4>Botões — pill, 44px (36 denso)</h4>
+        <div class="stack">
+          <div class="row-wrap"><button class="btn btn--acid">Primário NIGHT</button><button class="btn">Primário DAY</button></div>
+          <div class="row-wrap"><button class="btn btn--ghost">Secundário</button><button class="btn btn--danger">Excluir</button><button class="btn btn--acid" disabled>Disabled</button></div>
+          <div class="row-wrap"><button class="btn btn--acid btn--sm">Denso 36</button><button class="btn btn--ghost btn--sm">Denso ghost</button></div>
+          <p class="t-micro" style="color:var(--light-70)">Landing: + data-char-button (letra a letra). Tab para ver o anel de foco.</p>
+        </div>
+      </div>
+
+      <div class="plane" data-reveal>
+        <h4>PageHeader — obrigatório</h4>
+        <div class="ph-demo">
+          <span class="t-eyebrow" style="color:var(--light-70)">Admin · Financeiro</span>
+          <div class="t-h1" style="font-size:2rem">Financeiro</div>
+          <span class="t-small" style="color:var(--light-70)">Acompanhe a saúde da sua quadra mês a mês.</span>
+        </div>
+        <p class="t-micro" style="color:var(--light-70); margin-top:.8rem">Mata os H1 em 3 tamanhos: um papel, um lugar.</p>
+      </div>
+
+      <div class="plane" data-reveal>
+        <h4>Badges de status</h4>
+        <div class="row-wrap">
+          <span class="badge badge--paid">Pago</span>
+          <span class="badge badge--pending">Pendente</span>
+          <span class="badge badge--ok">Confirmada</span>
+          <span class="badge badge--cancel">Cancelada</span>
+        </div>
+        <p class="t-micro" style="color:var(--light-70); margin-top:1rem">Semântica fixa: acid=pago · clay=pendente · hairline=neutro. Estados funcionais não contam como acento.</p>
+      </div>
+
+      <div class="plane" data-reveal>
+        <h4>Formulário</h4>
+        <div class="stack">
+          <div class="field">
+            <label for="f1">E-mail</label>
+            <input id="f1" type="email" placeholder="voce@exemplo.com">
+          </div>
+          <div class="field err">
+            <label for="f2">Telefone</label>
+            <input id="f2" value="48 9999">
+            <span class="hint">Número incompleto — faltam dígitos.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="plane" data-reveal>
+        <h4>Tabela densa (admin)</h4>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Data</th><th>Aluno</th><th>Valor</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>22/08 · 18:00</td><td>Gabriel Ribeiro</td><td>R$ 55,00</td><td><span class="badge badge--paid">Pago</span></td></tr>
+              <tr><td>22/08 · 14:00</td><td>Natalia Azevedo</td><td>R$ 60,00</td><td><span class="badge badge--pending">Pendente</span></td></tr>
+              <tr><td>21/08 · 13:00</td><td>Luiza Mendes</td><td>R$ 80,00</td><td><span class="badge badge--ok">Confirmada</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="plane" data-reveal>
+        <h4>Calendário</h4>
+        <div class="cal">
+          <div>1</div><div>2</div><div class="busy">3</div><div class="today">4</div>
+          <div class="sel">5</div><div class="blocked">6</div><div>7</div>
+        </div>
+        <p class="t-micro" style="color:var(--light-70); margin-top:.8rem">hoje=anel · selecionado=acid · ocupado=wash · bloqueado=hachura</p>
+      </div>
+
+      <div class="plane" data-reveal>
+        <h4>Nav do app — 6 itens + Mais</h4>
+        <div class="navdemo">
+          <a class="active" href="#comp">Início</a><a href="#comp">Agenda</a><a href="#comp">Aulas</a>
+          <a href="#comp">Evolução</a><a href="#comp">Match</a><a href="#comp">Mais ▾</a>
+        </div>
+        <p class="t-micro" style="color:var(--light-70); margin-top:1rem">Logo h-10, header 64px. Os 10 itens atuais estouravam em 1280px.</p>
+      </div>
+
+      <div class="plane" data-reveal>
+        <h4>Toast + skeleton</h4>
+        <div class="stack">
+          <div class="toast">Presença confirmada!</div>
+          <div class="toast toast--err">Cancelamento exige 2h de antecedência.</div>
+          <div style="display:flex; flex-direction:column; gap:.45rem">
+            <div class="skel" style="height:.9rem; width:70%"></div>
+            <div class="skel" style="height:.9rem; width:50%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <a class="cta-block char-btn" href="#leis" style="border-color:var(--light); color:var(--light)">Ver as 10 leis</a>
+  </div>
+</section>
+
+<!-- ============ LEIS ============ -->
+<section id="leis" class="wrap">
+  <div class="sec-head">
+    <h2 class="t-h1">Leis de consistência</h2>
+    <span class="num">06 — lint social</span>
+  </div>
+  <div class="laws" data-reveal>
+    <div class="law"><p><b>Título de página = PageHeader.</b> Sem exceção.</p></div>
+    <div class="law"><p><b>Oito papéis de tipo.</b> Piso 12px — text-[8-11px] morreram.</p></div>
+    <div class="law"><p><b>Padding de card: 12/20/32.</b> Escolha um, não invente.</p></div>
+    <div class="law"><p><b>Raio: 0 ou pill.</b> Nada entre.</p></div>
+    <div class="law"><p><b>Sombra: nenhuma.</b> Profundidade é cor e escala.</p></div>
+    <div class="law"><p><b>Um acento por vista.</b> Estados funcionais não contam.</p></div>
+    <div class="law"><p><b>Controles só do kit.</b> button/input/select crus proibidos em rotas.</p></div>
+    <div class="law"><p><b>Motion só do runtime.</b> Nunca animação ad-hoc.</p></div>
+    <div class="law"><p><b>focus-visible em tudo.</b> O token base já dá — não sobrescrever.</p></div>
+    <div class="law"><p><b>Erros em PT-BR humano.</b> Nunca error.message cru.</p></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="meta">
+      <span>ON COURT v1.0 · plataforma On Tennis</span>
+      <span>base: paulkalkbrenner.net (eng. reversa 23/07/2026)</span>
+      <span>tokens.css · theme.tailwind.css · motion.js</span>
+    </div>
+    <div class="big">JOGO,<br>SET E <em>DS</em>.</div>
+  </div>
+</footer>
+
+<style>
+  .skel { position: relative; overflow: clip; background: var(--light-10); }
+  .skel::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 20%, var(--light-10) 50%, transparent 80%); animation: shimmer 1.4s var(--ease) infinite; }
+  @keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+  @media (prefers-reduced-motion: reduce) { .skel::after { animation: none; } }
+</style>
+
+<script>
+(function () {
+  'use strict';
+  var REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* reveal once @80% */
+  /* root estendido p/ cima: âncoras e scrolls rápidos não podem pular reveals */
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); } });
+  }, { rootMargin: '600% 0px -20% 0px' });
+  document.querySelectorAll('[data-reveal]').forEach(function (el) {
+    if (REDUCED) el.classList.add('is-in'); else io.observe(el);
+  });
+
+  /* char-stagger buttons */
+  document.querySelectorAll('.char-btn').forEach(function (btn) {
+    var label = btn.textContent.trim();
+    if (!label) return;
+    btn.setAttribute('aria-label', label);
+    btn.textContent = '';
+    Array.prototype.forEach.call(label, function (ch, i) {
+      var w = document.createElement('span');
+      w.className = 'char';
+      w.style.setProperty('--char', i + 1);
+      w.setAttribute('aria-hidden', 'true');
+      var a = document.createElement('span'), b = document.createElement('span');
+      a.textContent = ch === ' ' ? ' ' : ch;
+      b.textContent = a.textContent;
+      w.append(a, b);
+      btn.appendChild(w);
+    });
+  });
+
+  /* easing lab */
+  function run(row) {
+    row.classList.remove('lab-run');
+    void row.offsetWidth;
+    row.style.setProperty('--lab-ease', row.dataset.ease);
+    row.classList.add('lab-run');
+  }
+  document.querySelectorAll('.ease-row').forEach(function (row) {
+    row.addEventListener('click', function () { run(row); });
+  });
+  document.querySelector('.ease-lab').addEventListener('dblclick', function () {
+    document.querySelectorAll('.ease-row').forEach(run);
+  });
+
+  /* pixel reveal */
+  function pxReveal(host) {
+    if (REDUCED) return;
+    var old = host.querySelector('.px-panel');
+    if (old) old.remove();
+    var panel = document.createElement('div');
+    panel.className = 'px-panel';
+    var cells = [];
+    for (var c = 0; c < 100; c++) {
+      var px = document.createElement('div');
+      px.className = 'px-cell';
+      panel.appendChild(px);
+      cells.push(px);
+    }
+    host.appendChild(panel);
+    requestAnimationFrame(function () {
+      cells.forEach(function (el) {
+        el.style.transitionDelay = (Math.random() * 0.35).toFixed(3) + 's';
+        requestAnimationFrame(function () { el.classList.add('is-off'); });
+      });
+    });
+    setTimeout(function () { panel.remove(); }, 1400);
+  }
+  var media = document.querySelector('[data-px]');
+  var pxIO = new IntersectionObserver(function (es) {
+    es.forEach(function (e) { if (e.isIntersecting) { pxIO.unobserve(media); pxReveal(media); } });
+  }, { threshold: 0.35 });
+  pxIO.observe(media);
+  document.querySelector('[data-px-replay]').addEventListener('click', function () { pxReveal(media); });
+
+  /* marquee — repete o conteúdo até cobrir o container e clona o bloco;
+     sem isso o loop abre um buraco quando o bloco sai da tela */
+  document.querySelectorAll('.marquee').forEach(function (strip) {
+    var inner = strip.firstElementChild;
+    if (!inner || REDUCED) return;
+    var originals = Array.prototype.slice.call(inner.children);
+    var guard = 0;
+    while (inner.scrollWidth < strip.clientWidth * 1.1 && guard < 40) {
+      originals.forEach(function (n) { inner.appendChild(n.cloneNode(true)); });
+      guard++;
+    }
+    strip.style.setProperty('--mq-dur', Math.max(10, Math.round(inner.scrollWidth / 60)) + 's');
+    var clone = inner.cloneNode(true);
+    clone.setAttribute('aria-hidden', 'true');
+    strip.appendChild(clone);
+    addEventListener('resize', function () {
+      if (inner.scrollWidth < strip.clientWidth * 1.1) {
+        originals.forEach(function (n) { inner.appendChild(n.cloneNode(true)); });
+        strip.style.setProperty('--mq-dur', Math.max(10, Math.round(inner.scrollWidth / 60)) + 's');
+        while (clone.children.length < inner.children.length) {
+          clone.appendChild(inner.children[clone.children.length].cloneNode(true));
+        }
+      }
+    });
+  });
+
+  /* odometer */
+  function odo(el) {
+    var target = parseFloat(el.dataset.odo);
+    var prefix = el.dataset.odoPrefix || '';
+    var fmt = function (v) { return prefix + Math.round(v).toLocaleString('pt-BR'); };
+    if (REDUCED) { el.textContent = fmt(target); return; }
+    var t0 = performance.now(), DUR = 700;
+    (function frame(now) {
+      var p = Math.min(1, (now - t0) / DUR);
+      el.textContent = fmt(target * (1 - Math.pow(1 - p, 4)));
+      if (p < 1) requestAnimationFrame(frame);
+    })(t0);
+  }
+  var odos = document.querySelectorAll('[data-odo]');
+  var odoIO = new IntersectionObserver(function (es) {
+    es.forEach(function (e) { if (e.isIntersecting) { odoIO.unobserve(e.target); odo(e.target); } });
+  }, { threshold: 0.6 });
+  odos.forEach(function (el) { odoIO.observe(el); });
+  document.querySelector('[data-odo-replay]').addEventListener('click', function () {
+    odos.forEach(odo);
+  });
+})();
+</script>

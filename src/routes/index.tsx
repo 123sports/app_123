@@ -1,12 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Calendar, MessageCircle, CreditCard, Users, Clock, Trophy, Loader2, Instagram, Facebook, Youtube, Music2, Globe, Star, Sparkles, Zap, Heart } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { MessageCircle, Loader2, Instagram, Facebook, Youtube, Music2, Globe, Star, Trophy } from "lucide-react";
 import { z } from "zod";
 import { toast } from "sonner";
 import { Logo } from "@/components/Logo";
 import landingLogo from "@/assets/brand/on-tennis-app-light.png";
-
-import { TennisSwingVideo } from "@/components/TennisSwingVideo";
 
 import { playPop } from "@/lib/sfx";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,6 +29,163 @@ export const Route = createFileRoute("/")({
   component: Landing,
 });
 
+/* ============================================================================
+ * MÍDIA DA LANDING — placeholders até a chave de API chegar.
+ * Preencha as URLs abaixo (vídeo do hero + imagens dos divisores) e os
+ * placeholders estilizados são substituídos automaticamente.
+ * ========================================================================== */
+const HERO_VIDEO_URL: string | null = "/media/hero.mp4"; // gerado via Veo 3.1 (Gemini API)
+const MEDIA_BREAK_1_VIDEO: string | null = "/media/break-1.mp4"; // montagem 3 cortes (Veo 3.1)
+const MEDIA_BREAK_1: string | null = "/media/break-1.jpg"; // fallback/poster (gemini-3-pro-image)
+const MEDIA_SPLIT_A: string | null = "/media/split-a.jpg"; // aula em grupo
+const MEDIA_SPLIT_B: string | null = "/media/split-b.jpg"; // treino individual
+
+/* ============================================================================
+ * MOTION — estilos exclusivos da landing (não tocam o CSS global do app).
+ * Sistema PK: easing assinatura, entradas once, marquee, pixel reveal, grain.
+ * ========================================================================== */
+function LandingFxStyles() {
+  return (
+    <style>{`
+      /* --- hero: bloco central de vídeo → expande para o BG ---
+         Os VALORES dos estágios são inline (React); aqui só as transições. */
+      .lp-hero-media { position: absolute; z-index: 0; overflow: hidden;
+        transition: top .95s var(--on-ease), right .95s var(--on-ease), bottom .95s var(--on-ease), left .95s var(--on-ease), opacity .55s var(--on-ease), transform .95s var(--on-ease); }
+      .lp-hero-veil { position: absolute; inset: 0; z-index: 1; pointer-events: none;
+        background: linear-gradient(to top, rgba(11,18,12,.88) 0%, rgba(11,18,12,.45) 45%, rgba(11,18,12,.35) 100%);
+        transition: opacity .8s var(--on-ease); }
+
+      /* linhas do headline sobem uma a uma (roll-up PK) — valores inline */
+      .lp-line { display: block; overflow: hidden; }
+      .lp-line > span { display: block; transition: transform .85s var(--on-ease); }
+      .lp-fade { transition: opacity .7s var(--on-ease), transform .7s var(--on-ease); }
+
+      /* --- marquee tipográfico (duas metades idênticas = loop sem emenda) --- */
+      .lp-marquee { animation: lp-marquee 30s linear infinite; }
+      .lp-marquee:hover { animation-play-state: paused; }
+      @keyframes lp-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+      /* --- revelação pixelada (grade 25×4 na cor do fundo) --- */
+      .lp-px { position: absolute; inset: 0; z-index: 3; pointer-events: none; display: grid;
+        grid-template-columns: repeat(25, 1fr); grid-template-rows: repeat(4, 1fr); }
+      .lp-px > i { display: block; background: var(--background); transition: opacity .5s ease; }
+      .lp-px > i.off { opacity: 0; }
+
+      /* --- ken burns lento nas mídias --- */
+      .lp-kenburns { animation: lp-kb 16s ease-in-out infinite alternate; }
+      @keyframes lp-kb { from { transform: scale(1); } to { transform: scale(1.07); } }
+
+      /* --- cursor contextual --- */
+      .lp-cursor { position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; height: 2.25rem; width: 2.25rem;
+        margin: -1.125rem 0 0 -1.125rem; border: 1px solid var(--foreground); border-radius: 9999px; opacity: 0;
+        mix-blend-mode: difference; border-color: #fff;
+        transition: opacity .3s ease, width .2s var(--on-ease), height .2s var(--on-ease), margin .2s var(--on-ease); }
+      .lp-cursor.on { opacity: .5; }
+      .lp-cursor.lg { height: 4rem; width: 4rem; margin: -2rem 0 0 -2rem; opacity: .95; }
+
+      @media (hover: none), (prefers-reduced-motion: reduce) {
+        .lp-cursor { display: none; }
+        .lp-marquee { animation: none; }
+        .lp-kenburns { animation: none; }
+        .lp-hero-media { transition: none; }
+        .lp-line > span, .lp-fade { transition: none; }
+      }
+    `}</style>
+  );
+}
+
+/* Cursor: anel que segue o mouse com atraso e cresce sobre interativos. */
+function CustomCursor() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (
+      typeof matchMedia === "undefined" ||
+      matchMedia("(hover: none)").matches ||
+      matchMedia("(prefers-reduced-motion: reduce)").matches
+    )
+      return;
+    const el = ref.current;
+    if (!el) return;
+    let x = 0, y = 0, tx = 0, ty = 0, raf = 0;
+    const loop = () => {
+      tx += (x - tx) * 0.2;
+      ty += (y - ty) * 0.2;
+      el.style.transform = `translate(${tx}px, ${ty}px)`;
+      raf = requestAnimationFrame(loop);
+    };
+    const move = (e: PointerEvent) => { x = e.clientX; y = e.clientY; el.classList.add("on"); };
+    const over = (e: PointerEvent) => {
+      const hit = (e.target as HTMLElement)?.closest?.("a, button, [role=button], input, textarea, select");
+      el.classList.toggle("lg", !!hit);
+    };
+    const leave = () => el.classList.remove("on");
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerover", over);
+    document.addEventListener("pointerleave", leave);
+    raf = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerover", over);
+      document.removeEventListener("pointerleave", leave);
+    };
+  }, []);
+  return <div ref={ref} className="lp-cursor" aria-hidden />;
+}
+
+/* Rótulo com roll-up letra-a-letra (hover do styleguide). O CSS global
+   [data-char-button]/.on-char cuida da animação; aqui só renderizamos os
+   pares de spans com o índice --char. */
+function CharLabel({ text }: { text: string }) {
+  return (
+    <span aria-hidden className="flex">
+      {[...text].map((ch, i) => (
+        <span key={i} className="on-char" style={{ "--char": String(i + 1) } as React.CSSProperties}>
+          <span>{ch === " " ? " " : ch}</span>
+          <span>{ch === " " ? " " : ch}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/* Entradas once a ~88% da viewport, com MutationObserver para elementos que
+   montam depois (ex.: depoimentos após fetch). */
+function useLandingReveals() {
+  useEffect(() => {
+    const reduce = typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const seen = new WeakSet<Element>();
+    const io = reduce
+      ? null
+      : new IntersectionObserver(
+          (entries) =>
+            entries.forEach((e) => {
+              if (e.isIntersecting) {
+                e.target.classList.add("is-in");
+                io?.unobserve(e.target);
+              }
+            }),
+          { rootMargin: "0px 0px -12% 0px" },
+        );
+    const handle = (el: Element) => {
+      if (seen.has(el)) return;
+      seen.add(el);
+      if (!io) { el.classList.add("is-in"); return; }
+      io.observe(el);
+    };
+    const scan = (root: Element | Document) => {
+      if (root instanceof Element && root.matches("[data-reveal]")) handle(root);
+      root.querySelectorAll("[data-reveal]").forEach(handle);
+    };
+    scan(document);
+    const mo = new MutationObserver((muts) =>
+      muts.forEach((m) => m.addedNodes.forEach((n) => { if (n instanceof Element) scan(n); })),
+    );
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => { io?.disconnect(); mo.disconnect(); };
+  }, []);
+}
+
 function Landing() {
   const navigate = useNavigate();
   useEffect(() => {
@@ -38,14 +193,25 @@ function Landing() {
       if (data.session) navigate({ to: "/app" });
     });
   }, [navigate]);
+  useLandingReveals();
   return (
-    <div className="min-h-screen hero-bg">
+    <div className="relative min-h-screen hero-bg">
+      <LandingFxStyles />
+      <div className="on-grain" aria-hidden />
+      <CustomCursor />
       <Toaster />
-      <Header />
       <Hero />
-      <SocialProofBar />
+      <Marquee />
       <Features />
+      <MediaBreak
+        src={MEDIA_BREAK_1}
+        video={MEDIA_BREAK_1_VIDEO}
+        eyebrow="Na quadra · todos os níveis"
+        title="Tênis pra quem joga. E pra quem quer começar."
+        placeholderLabel="Imagem — jogo na quadra"
+      />
       <HowItWorks />
+      <MediaSplit />
       <Testimonials />
       <LeadCapture />
       <CoachApply />
@@ -56,198 +222,357 @@ function Landing() {
   );
 }
 
-function FloatingWhatsApp() {
-  const [whatsapp, setWhatsapp] = useState("");
-  const [whatsappMsg, setWhatsappMsg] = useState("");
-
+/* ============================================================================
+ * HERO — coreografia de carregamento:
+ * stage 0 (boot) → 1: bloco de vídeo entra no centro → 2: bloco expande até o
+ * BG e o véu escurece → 3: headline sobe linha a linha, CTAs e meta entram.
+ * ========================================================================== */
+function Hero() {
+  const [stage, setStage] = useState(0);
   useEffect(() => {
-    (async () => {
-      const { data } = await (supabase as any)
-        .from("site_settings")
-        .select("key, value")
-        .in("key", ["whatsapp_number", "whatsapp_message"]);
-      const map = Object.fromEntries(((data as any[]) ?? []).map((r) => [r.key, r.value ?? ""]));
-      setWhatsapp((map["whatsapp_number"] ?? "").replace(/[^\d]/g, ""));
-      setWhatsappMsg(map["whatsapp_message"] ?? "");
-    })();
+    if (typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setStage(3);
+      return;
+    }
+    const ts = [
+      setTimeout(() => setStage(1), 150),
+      setTimeout(() => setStage(2), 1350),
+      setTimeout(() => setStage(3), 2150),
+    ];
+    return () => ts.forEach(clearTimeout);
   }, []);
 
-  if (!whatsapp) return null;
-  const href = `https://wa.me/${whatsapp}${whatsappMsg ? `?text=${encodeURIComponent(whatsappMsg)}` : ""}`;
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      onClick={() => playPop()}
-      aria-label="Reservar pelo WhatsApp"
-      className="btn-bounce fixed bottom-5 right-5 z-50 inline-flex items-center gap-2 rounded-full bg-[#25D366] px-5 py-3.5 text-sm font-semibold text-white shadow-glow hover:bg-[#1ebe5b]"
-    >
-      <MessageCircle className="h-5 w-5" />
-      <span className="hidden sm:inline">Reservar pelo WhatsApp</span>
-    </a>
-  );
-}
+  const lineStyle = (delay: number): React.CSSProperties => ({
+    transform: stage >= 3 ? "none" : "translateY(118%)",
+    transitionDelay: `${delay}ms`,
+  });
+  const fadeStyle = (delay: number): React.CSSProperties => ({
+    opacity: stage >= 3 ? 1 : 0,
+    transform: stage >= 3 ? "none" : "translateY(1rem)",
+    transitionDelay: `${delay}ms`,
+  });
 
-function Header() {
   return (
-    <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-      <img
-        src={landingLogo}
-        alt="On Tennis — Olimpio Neto Treinamento Esportivo"
-        className="h-16 md:h-20 w-auto object-contain"
-      />
-      <nav className="hidden items-center gap-8 text-sm font-medium md:flex">
-        <a href="#features" className="hover:text-primary">Recursos</a>
-        <a href="#how" className="hover:text-primary">Como funciona</a>
-        <a href="#cta" className="hover:text-primary">Começar</a>
-      </nav>
-      <div className="flex items-center gap-2 sm:gap-3">
-        <Link
-          to="/auth"
-          onClick={() => playPop()}
-          className="btn-bounce rounded-full px-3 py-2 text-sm font-semibold text-foreground hover:text-primary sm:px-4"
-        >
-          Entrar
-        </Link>
-        <Link
-          to="/auth"
-          search={{ mode: "signup" } as any}
-          onClick={() => playPop()}
-          className="btn-bounce inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow sm:px-5"
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          Criar conta
-        </Link>
+    <section className="relative flex min-h-svh flex-col overflow-hidden bg-ink text-white">
+      {/* mídia: bloco central → background (valores inline por estágio) */}
+      <div
+        className="lp-hero-media"
+        style={{
+          inset: stage >= 2 ? "0%" : "22% 14%",
+          opacity: stage >= 1 ? 1 : 0,
+          transform: stage >= 1 ? "none" : "scale(.94)",
+        }}
+      >
+        <HeroMedia />
       </div>
-    </header>
-  );
-}
+      <div className="lp-hero-veil" style={{ opacity: stage >= 2 ? 1 : 0 }} />
 
-function Hero() {
-  return (
-    <section className="relative mx-auto grid max-w-6xl gap-12 px-6 py-16 md:grid-cols-2 md:items-center md:py-24">
-      <div className="absolute -left-32 top-20 -z-10 h-64 w-64 rounded-full bg-primary/20 blur-3xl" />
-      <div className="absolute right-0 bottom-0 -z-10 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
-
-      <div className="relative z-20 animate-float-in space-y-6">
-
-        <span className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-4 py-1.5 text-xs font-semibold text-primary">
-          <Sparkles className="h-3 w-3" />
-          Nova forma de jogar tênis
-        </span>
-        <h1 className="text-5xl font-bold leading-[1.05] md:text-6xl lg:text-7xl">
-          Marque sua aula{" "}
-          <span className="relative inline-block">
-            <span className="relative z-10 text-foreground">em 30 segundos</span>
-            <span className="absolute inset-x-0 bottom-1 -z-0 h-4 bg-primary/70 md:h-5" />
-          </span>{" "}
-          e entre em quadra.
-        </h1>
-        <p className="max-w-lg text-lg text-muted-foreground md:text-xl">
-          Chega de WhatsApp lotado e horário trocado. Reserve, pague e jogue —
-          tudo direto do seu celular, 24 horas por dia.
-        </p>
-        <div className="flex flex-wrap gap-3 pt-2">
+      {/* header sobre o hero */}
+      <header className="lp-fade relative z-20 flex items-center justify-between px-6 py-5 md:px-10" style={fadeStyle(500)}>
+        <img src={landingLogo} alt="On Tennis — Olimpio Neto Treinamento Esportivo" className="h-14 w-auto object-contain md:h-16" />
+        <nav className="hidden items-center gap-8 text-sm font-bold md:flex">
+          <a href="#features" className="text-white/70 transition-colors hover:text-white">Recursos</a>
+          <a href="#how" className="text-white/70 transition-colors hover:text-white">Como funciona</a>
+          <a href="#contato" className="text-white/70 transition-colors hover:text-white">Contato</a>
+        </nav>
+        <div className="flex items-center gap-2 sm:gap-3">
           <Link
             to="/auth"
             onClick={() => playPop()}
-            className="btn-bounce inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3.5 text-base font-semibold text-primary-foreground shadow-glow"
+            className="btn-bounce rounded-full px-3 py-2 text-sm font-bold text-white/80 transition-colors hover:text-white sm:px-4"
           >
-            <Zap className="h-5 w-5" /> Reservar minha aula
+            Entrar
+          </Link>
+          <Link
+            to="/auth"
+            search={{ mode: "signup" } as any}
+            onClick={() => playPop()}
+            data-char-button
+            aria-label="Criar conta"
+            className="btn-bounce inline-flex items-center rounded-full bg-acid px-5 py-2.5 text-sm font-bold text-ink"
+          >
+            <CharLabel text="Criar conta" />
+          </Link>
+        </div>
+      </header>
+
+      {/* conteúdo ancorado embaixo, estilo PK */}
+      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col justify-end px-6 pb-14 pt-10 md:px-10">
+        <p className="lp-fade text-[13px] font-bold uppercase tracking-[.08em] text-acid" style={fadeStyle(80)}>
+          On Tennis · Olimpio Neto Treinamento Esportivo
+        </p>
+        <h1 className="mt-4 text-[clamp(2.75rem,8.5vw,7rem)] font-bold leading-[.88] tracking-[-.03em]">
+          <span className="lp-line"><span style={lineStyle(0)}>Marque sua aula</span></span>
+          <span className="lp-line">
+            <span style={lineStyle(90)}>
+              em <span className="text-acid">30 segundos</span>
+            </span>
+          </span>
+          <span className="lp-line">
+            <span style={lineStyle(180)}>e entre em quadra.</span>
+          </span>
+        </h1>
+
+        <div className="lp-fade mt-8 flex flex-wrap items-center gap-3" style={fadeStyle(380)}>
+          <Link
+            to="/auth"
+            onClick={() => playPop()}
+            data-char-button
+            aria-label="Reservar minha aula"
+            className="btn-bounce inline-flex items-center rounded-full bg-acid px-7 py-3.5 text-base font-bold text-ink"
+          >
+            <CharLabel text="Reservar minha aula" />
           </Link>
           <a
             href="#contato"
             onClick={() => playPop()}
-            className="btn-bounce rounded-full border border-border bg-card px-6 py-3.5 text-base font-semibold text-foreground hover:border-primary"
+            className="btn-bounce rounded-full border border-white/40 px-7 py-3.5 text-base font-bold text-white transition-colors hover:bg-white/10"
           >
             Quero saber mais
           </a>
         </div>
-        <div className="flex flex-wrap items-center gap-6 pt-4 text-sm text-muted-foreground">
-          <Stat n="24/7" label="Reserva online" />
-          <Stat n="2h" label="Cancele com antecedência" />
-          <Stat n="100%" label="Pagamento seguro" />
+
+        <div className="lp-fade mt-10 flex flex-wrap items-center justify-between gap-6 border-t border-white/20 pt-5" style={fadeStyle(520)}>
+          <div className="flex flex-wrap gap-10">
+            <HeroStat n="24/7" label="Reserva online" />
+            <HeroStat n="2h" label="Cancelamento flexível" />
+            <HeroStat n="100%" label="Pagamento seguro" />
+          </div>
+          <span className="hidden text-xs font-bold uppercase tracking-[.08em] text-white/40 md:block">
+            Role para descobrir ↓
+          </span>
         </div>
       </div>
-
-      <div className="relative flex items-center justify-center">
-        <BallShowcase />
-      </div>
     </section>
   );
 }
 
-
-
-
-
-function SocialProofBar() {
-  return (
-    <section className="border-y border-border bg-card/40 py-6">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-6 px-6 text-center text-sm text-muted-foreground md:gap-12">
-        <div className="flex items-center gap-2"><Heart className="h-4 w-4 text-primary" /> <span>Alunos amam reservar pelo app</span></div>
-        <div className="flex items-center gap-2"><Star className="h-4 w-4 fill-primary text-primary" /> <span>Aulas avaliadas em tempo real</span></div>
-        <div className="flex items-center gap-2"><MessageCircle className="h-4 w-4 text-primary" /> <span>Professor a um clique de distância</span></div>
-      </div>
-    </section>
-  );
-}
-
-function Stat({ n, label }: { n: string; label: string }) {
+function HeroStat({ n, label }: { n: string; label: string }) {
   return (
     <div>
-      <div className="text-xl font-bold text-foreground">{n}</div>
-      <div className="text-xs">{label}</div>
+      <div className="type-data text-2xl font-bold text-white">{n}</div>
+      <div className="text-xs uppercase tracking-[.06em] text-white/50">{label}</div>
     </div>
   );
 }
 
-function BallShowcase() {
+/* Vídeo do hero — enquanto não há URL, um placeholder de quadra desenhado em
+   CSS (linhas de giz + ken burns) segura a composição. */
+function HeroMedia() {
+  if (HERO_VIDEO_URL) {
+    return <video className="lp-kenburns h-full w-full object-cover" src={HERO_VIDEO_URL} autoPlay muted loop playsInline />;
+  }
   return (
-    <div className="relative flex h-[520px] w-full items-center justify-center">
-      <div className="absolute inset-0 rounded-[2rem] bg-primary/15 blur-3xl" />
-      {/* Full-body player: contain so feet + racket follow-through stay in frame. */}
-      <TennisSwingVideo className="h-full w-full object-contain" />
+    <div className="relative h-full w-full overflow-hidden bg-[linear-gradient(160deg,#20301f_0%,#101a10_55%,#0b120c_100%)]">
+      <div className="lp-kenburns absolute inset-0">
+        {/* quadra em perspectiva simples */}
+        <div className="absolute inset-x-[10%] inset-y-[14%] border-2 border-white/20" />
+        <div className="absolute inset-x-[10%] top-1/2 h-0.5 bg-white/25" />
+        <div className="absolute inset-y-[14%] left-1/2 w-0.5 bg-white/10" />
+        <div className="absolute bottom-1/2 left-[28%] right-[28%] top-[14%] border-x-2 border-b-2 border-white/10" />
+        <div className="absolute bottom-[14%] left-[28%] right-[28%] top-1/2 border-x-2 border-t-0 border-white/10" />
+        {/* bola */}
+        <div className="absolute left-[62%] top-[34%] h-5 w-5 rounded-full bg-acid" />
+      </div>
+      <span className="absolute bottom-4 left-4 z-10 border border-white/25 px-2 py-1 text-[11px] font-bold uppercase tracking-[.08em] text-white/50">
+        Placeholder — vídeo: pessoas jogando tênis
+      </span>
     </div>
   );
 }
 
-
-
-function Features() {
-  const items = [
-    { icon: Calendar, title: "Reserve em segundos", desc: "Escolha o horário que cabe na sua rotina, direto do celular." },
-    { icon: Users, title: "Jogue do seu jeito", desc: "Aula individual, dupla, trio ou quarteto — você decide com quem treinar." },
-    { icon: CreditCard, title: "Pague como preferir", desc: "PIX, crédito, débito ou mensalidade. Sua reserva já sai garantida." },
-    { icon: MessageCircle, title: "Fale com o professor", desc: "Tire dúvidas, peça dicas e combine detalhes sem sair do app." },
-    { icon: Trophy, title: "Evolua jogando", desc: "Acompanhe vitórias, aces e gamificação para ver seu progresso." },
-    { icon: Clock, title: "Sem dor de cabeça", desc: "Lembretes automáticos, confirmação rápida e cancelamento flexível." },
-  ];
+/* ============================================================================
+ * MARQUEE tipográfico (PK) — palavras grandes, pausa no hover.
+ * ========================================================================== */
+function Marquee() {
+  const words = ["Reserve", "Jogue", "Evolua", "On Tennis", "Match aberto", "Aulas em grupo"];
+  const half = [...words, ...words];
+  const track = [...half, ...half];
   return (
-    <section id="features" className="mx-auto max-w-6xl px-6 py-20">
-      <h2 className="max-w-2xl text-4xl font-bold">Tudo que o seu jogo precisa, num só app.</h2>
-      <p className="mt-3 max-w-xl text-muted-foreground">
-        Pensado para o aluno: marcar aula, pagar, treinar e evoluir — simples assim.
-      </p>
-      <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-        {items.map((it) => (
-          <div
-            key={it.title}
-            className="group rounded-2xl border border-border bg-card p-6 shadow-soft transition hover:-translate-y-1 hover:border-primary"
-          >
-            <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground transition group-hover:scale-110">
-              <it.icon className="h-6 w-6" />
-            </div>
-            <h3 className="text-lg font-semibold">{it.title}</h3>
-            <p className="mt-2 text-sm text-muted-foreground">{it.desc}</p>
-          </div>
+    <section className="overflow-hidden border-b border-border bg-background py-5" aria-label="On Tennis">
+      <div className="lp-marquee flex w-max items-center gap-8">
+        {track.map((w, i) => (
+          <span key={i} className="flex shrink-0 items-center gap-8 whitespace-nowrap text-2xl font-bold uppercase tracking-[-.02em] text-foreground md:text-3xl">
+            {w}
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-lime" aria-hidden />
+          </span>
         ))}
       </div>
     </section>
   );
 }
 
+/* ============================================================================
+ * FEATURES — lista numerada com hairlines (PK), título sticky à esquerda.
+ * ========================================================================== */
+function Features() {
+  const items = [
+    { n: "01", t: "Reserve em segundos", d: "Escolha o horário que cabe na sua rotina, direto do celular." },
+    { n: "02", t: "Jogue do seu jeito", d: "Aula individual, dupla, trio ou quarteto — você decide com quem treinar." },
+    { n: "03", t: "Pague como preferir", d: "PIX, crédito, débito ou mensalidade. Sua reserva já sai garantida." },
+    { n: "04", t: "Fale com o professor", d: "Tire dúvidas, peça dicas e combine detalhes sem sair do app." },
+    { n: "05", t: "Evolua jogando", d: "Avaliações, níveis e certificados para acompanhar seu progresso." },
+    { n: "06", t: "Sem dor de cabeça", d: "Lembretes automáticos, confirmação rápida e cancelamento flexível." },
+  ];
+  return (
+    <section id="features" className="mx-auto max-w-6xl px-6 py-24 md:py-32">
+      <div className="grid gap-12 md:grid-cols-[1fr_1.35fr] md:gap-16">
+        <div className="self-start md:sticky md:top-16">
+          <p data-reveal className="type-eyebrow">O que você ganha</p>
+          <h2 data-reveal className="mt-3 text-4xl font-bold leading-[.9] tracking-[-.03em] md:text-6xl" style={{ transitionDelay: "60ms" }}>
+            Tudo que o seu jogo precisa.
+          </h2>
+          <p data-reveal className="mt-5 max-w-sm text-muted-foreground" style={{ transitionDelay: "120ms" }}>
+            Pensado para o aluno: marcar aula, pagar, treinar e evoluir — simples assim.
+          </p>
+        </div>
+        <ul className="border-y border-border">
+          {items.map((it, i) => (
+            <li key={it.n} data-reveal style={{ transitionDelay: `${i * 50}ms` }} className={i > 0 ? "border-t border-border" : ""}>
+              <div className="group flex gap-6 px-2 py-6 transition-colors hover:bg-card md:px-4 md:py-7">
+                <span className="type-data w-12 shrink-0 text-2xl font-bold text-lime">{it.n}</span>
+                <div>
+                  <h3 className="text-xl font-bold md:text-2xl">{it.t}</h3>
+                  <p className="mt-1.5 text-sm text-muted-foreground md:text-base">{it.d}</p>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+/* ============================================================================
+ * DIVISORES DE MÍDIA — imagem full-bleed com revelação pixelada + legenda.
+ * ========================================================================== */
+function PixelReveal() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const grid = ref.current;
+    if (!grid) return;
+    const cells = Array.from(grid.children) as HTMLElement[];
+    if (typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      cells.forEach((c) => c.classList.add("off"));
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) =>
+        entries.forEach((e) => {
+          if (!e.isIntersecting) return;
+          io.disconnect();
+          cells.forEach((c) => {
+            c.style.transitionDelay = (Math.random() * 0.4).toFixed(3) + "s";
+            c.classList.add("off");
+          });
+        }),
+      { threshold: 0.25 },
+    );
+    io.observe(grid);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className="lp-px" aria-hidden>
+      {Array.from({ length: 100 }).map((_, i) => (
+        <i key={i} />
+      ))}
+    </div>
+  );
+}
+
+function MediaPlaceholder({ label, tone = "green" }: { label: string; tone?: "green" | "deep" }) {
+  const bg = tone === "green"
+    ? "bg-[linear-gradient(150deg,#26381f_0%,#131d12_60%,#0b120c_100%)]"
+    : "bg-[linear-gradient(150deg,#17242b_0%,#0e161a_60%,#0b120c_100%)]";
+  return (
+    <div className={`relative h-full w-full overflow-hidden ${bg}`}>
+      <div className="lp-kenburns absolute inset-0">
+        <div className="absolute inset-x-[8%] inset-y-[16%] border-2 border-white/15" />
+        <div className="absolute inset-x-[8%] top-1/2 h-0.5 bg-white/20" />
+        <div className="absolute left-[70%] top-[30%] h-4 w-4 rounded-full bg-acid" />
+      </div>
+      <span className="absolute bottom-4 right-4 z-10 border border-white/25 px-2 py-1 text-[11px] font-bold uppercase tracking-[.08em] text-white/50">
+        Placeholder — {label}
+      </span>
+    </div>
+  );
+}
+
+function MediaBreak({
+  src,
+  video,
+  eyebrow,
+  title,
+  placeholderLabel,
+}: {
+  src: string | null;
+  video?: string | null;
+  eyebrow: string;
+  title: string;
+  placeholderLabel: string;
+}) {
+  return (
+    <section className="relative h-[60vh] w-full overflow-hidden md:h-[72vh]">
+      {video ? (
+        <video
+          className="h-full w-full object-cover"
+          src={video}
+          poster={src ?? undefined}
+          autoPlay
+          muted
+          loop
+          playsInline
+        />
+      ) : src ? (
+        <img src={src} alt="" className="lp-kenburns h-full w-full object-cover" />
+      ) : (
+        <MediaPlaceholder label={placeholderLabel} />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/20 to-transparent" />
+      <PixelReveal />
+      <div className="absolute inset-x-0 bottom-0 z-[4] mx-auto w-full max-w-6xl px-6 pb-10 text-white md:px-10 md:pb-14">
+        <p data-reveal className="text-[13px] font-bold uppercase tracking-[.08em] text-acid">{eyebrow}</p>
+        <p data-reveal className="mt-3 max-w-3xl text-3xl font-bold leading-[.95] tracking-[-.02em] md:text-5xl" style={{ transitionDelay: "80ms" }}>
+          {title}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/* Divisor duplo — duas imagens lado a lado com legendas. */
+function MediaSplit() {
+  const cells = [
+    { src: MEDIA_SPLIT_A, eyebrow: "Aulas em grupo", title: "Dupla, trio ou quarteto.", label: "imagem — aula em grupo" },
+    { src: MEDIA_SPLIT_B, eyebrow: "Treino individual", title: "Você e o professor.", label: "imagem — treino individual" },
+  ];
+  return (
+    <section className="grid md:grid-cols-2">
+      {cells.map((c, i) => (
+        <div key={c.eyebrow} className="relative h-[45vh] overflow-hidden md:h-[56vh]">
+          {c.src ? (
+            <img src={c.src} alt="" className="lp-kenburns h-full w-full object-cover" />
+          ) : (
+            <MediaPlaceholder label={c.label} tone={i === 0 ? "green" : "deep"} />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-ink/80 via-ink/10 to-transparent" />
+          <PixelReveal />
+          <div className="absolute inset-x-0 bottom-0 z-[4] p-6 text-white md:p-10">
+            <p data-reveal className="text-[13px] font-bold uppercase tracking-[.08em] text-acid">{c.eyebrow}</p>
+            <p data-reveal className="mt-2 text-2xl font-bold leading-none tracking-[-.02em] md:text-4xl" style={{ transitionDelay: "80ms" }}>
+              {c.title}
+            </p>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/* ============================================================================
+ * COMO FUNCIONA — seção invertida (tinta), colunas com hairline, números acid.
+ * ========================================================================== */
 function HowItWorks() {
   const steps = [
     { n: "01", t: "Crie seu perfil", d: "Cadastro completo com foto, contato e dados do aluno." },
@@ -256,15 +581,23 @@ function HowItWorks() {
     { n: "04", t: "Jogue!", d: "Receba lembretes e converse com seu professor." },
   ];
   return (
-    <section id="how" className="bg-secondary/40 py-20">
-      <div className="mx-auto max-w-6xl px-6">
-        <h2 className="text-4xl font-bold">Do cadastro ao saque inicial.</h2>
-        <div className="mt-12 grid gap-6 md:grid-cols-4">
-          {steps.map((s) => (
-            <div key={s.n} className="rounded-2xl border border-border bg-card p-6">
-              <div className="text-3xl font-bold text-primary">{s.n}</div>
-              <div className="mt-3 font-semibold">{s.t}</div>
-              <p className="mt-2 text-sm text-muted-foreground">{s.d}</p>
+    <section id="how" className="bg-ink py-24 text-white md:py-32">
+      <div className="mx-auto max-w-6xl px-6 md:px-10">
+        <p data-reveal className="text-[13px] font-bold uppercase tracking-[.08em] text-white/50">Como funciona</p>
+        <h2 data-reveal className="mt-3 text-4xl font-bold leading-[.9] tracking-[-.03em] md:text-6xl" style={{ transitionDelay: "60ms" }}>
+          Do cadastro<br />ao saque inicial.
+        </h2>
+        <div className="mt-16 grid border-y border-white/15 md:grid-cols-4">
+          {steps.map((s, i) => (
+            <div
+              key={s.n}
+              data-reveal
+              style={{ transitionDelay: `${i * 70}ms` }}
+              className="border-white/15 p-6 max-md:border-t max-md:first:border-t-0 md:border-l md:p-8 md:first:border-l-0"
+            >
+              <div className="type-data text-5xl font-bold text-acid">{s.n}</div>
+              <div className="mt-5 text-lg font-bold">{s.t}</div>
+              <p className="mt-2 text-sm text-white/60">{s.d}</p>
             </div>
           ))}
         </div>
@@ -309,28 +642,23 @@ function Testimonials() {
   if (items.length === 0) return null;
 
   return (
-    <section className="bg-secondary/40 py-20">
-      <div className="mx-auto max-w-6xl px-6">
-        <div className="text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-4 py-1.5 text-xs font-semibold text-primary">
-            <Star className="h-3 w-3 fill-primary" /> Depoimentos
-          </span>
-          <h2 className="mt-4 text-4xl font-bold md:text-5xl">Quem joga aqui, recomenda.</h2>
-          <p className="mt-3 text-muted-foreground">Avaliações reais de alunos que treinam com a gente.</p>
-        </div>
-        <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {items.map((t) => (
-            <div key={t.id} className="rounded-2xl border border-border bg-card p-6 shadow-soft transition hover:-translate-y-1 hover:border-primary">
-              <div className="mb-3 flex items-center gap-0.5">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <Star key={n} className={`h-4 w-4 ${n <= t.rating ? "fill-primary text-primary" : "text-muted-foreground/30"}`} />
-                ))}
-              </div>
-              {t.comment && <p className="text-sm italic text-foreground/90">"{t.comment}"</p>}
-              <div className="mt-4 text-xs font-semibold text-muted-foreground">— {t.student_name}</div>
+    <section className="mx-auto max-w-6xl px-6 py-24 md:py-32">
+      <p data-reveal className="type-eyebrow">Depoimentos</p>
+      <h2 data-reveal className="mt-3 max-w-2xl text-4xl font-bold leading-[.9] tracking-[-.03em] md:text-6xl" style={{ transitionDelay: "60ms" }}>
+        Quem joga aqui, recomenda.
+      </h2>
+      <div className="mt-14 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {items.map((t, i) => (
+          <div key={t.id} data-reveal style={{ transitionDelay: `${i * 50}ms` }} className="flex flex-col bg-card p-6">
+            <div className="mb-4 flex items-center gap-0.5">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <Star key={n} className={`h-4 w-4 ${n <= t.rating ? "fill-lime text-lime" : "text-muted-foreground/30"}`} />
+              ))}
             </div>
-          ))}
-        </div>
+            {t.comment && <p className="text-base font-medium leading-snug text-foreground">"{t.comment}"</p>}
+            <div className="mt-auto pt-5 text-xs font-bold uppercase tracking-[.06em] text-muted-foreground">— {t.student_name}</div>
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -382,20 +710,18 @@ function LeadCapture() {
   };
 
   return (
-    <section id="contato" className="bg-secondary/40 py-20">
-      <div className="mx-auto grid max-w-6xl gap-10 px-6 md:grid-cols-2 md:items-center">
-        <div className="space-y-4">
-          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium">
-            Pré-cadastro
-          </span>
-          <h2 className="text-4xl font-bold leading-tight md:text-5xl">
-            Quer começar a jogar? Deixe seu contato.
+    <section id="contato" className="border-y border-border bg-card/30 py-24 md:py-32">
+      <div className="mx-auto grid max-w-6xl gap-12 px-6 md:grid-cols-2 md:items-center md:px-10">
+        <div>
+          <p data-reveal className="type-eyebrow">Pré-cadastro</p>
+          <h2 data-reveal className="mt-3 text-4xl font-bold leading-[.9] tracking-[-.03em] md:text-6xl" style={{ transitionDelay: "60ms" }}>
+            Quer começar a jogar?
           </h2>
-          <p className="text-muted-foreground">
+          <p data-reveal className="mt-5 max-w-md text-muted-foreground" style={{ transitionDelay: "120ms" }}>
             Conte rapidamente o que você procura — aula individual, em grupo, horário, nível.
             Nosso time entra em contato para encontrar o melhor horário para você.
           </p>
-          <ul className="space-y-2 text-sm text-muted-foreground">
+          <ul data-reveal className="mt-6 space-y-2 text-sm text-muted-foreground" style={{ transitionDelay: "180ms" }}>
             <li>• Resposta em até 1 dia útil</li>
             <li>• Sem compromisso</li>
             <li>• Atendimento personalizado</li>
@@ -403,12 +729,14 @@ function LeadCapture() {
         </div>
 
         <form
+          data-reveal
           onSubmit={submit}
-          className="space-y-3 rounded-3xl border border-border bg-card p-6 shadow-soft"
+          className="space-y-3 bg-card p-6 md:p-8"
+          style={{ transitionDelay: "140ms" }}
         >
           {sent ? (
             <div className="space-y-3 py-6 text-center">
-              <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-primary text-2xl">✓</div>
+              <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-lime/20 text-2xl text-foreground">✓</div>
               <h3 className="text-xl font-bold">Recebido!</h3>
               <p className="text-sm text-muted-foreground">
                 Entraremos em contato pelo telefone informado.
@@ -424,53 +752,53 @@ function LeadCapture() {
           ) : (
             <>
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Nome *</label>
+                <label className="mb-1 block type-eyebrow">Nome *</label>
                 <input
                   required
                   maxLength={100}
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+                  className="w-full border border-input bg-background px-3 py-2.5 text-sm"
                   placeholder="Seu nome completo"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Telefone / WhatsApp *</label>
+                <label className="mb-1 block type-eyebrow">Telefone / WhatsApp *</label>
                 <input
                   required
                   type="tel"
                   maxLength={20}
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+                  className="w-full border border-input bg-background px-3 py-2.5 text-sm"
                   placeholder="(51) 99999-9999"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Onde você mora</label>
+                <label className="mb-1 block type-eyebrow">Onde você mora</label>
                 <input
                   maxLength={120}
                   value={form.city}
                   onChange={(e) => setForm({ ...form, city: e.target.value })}
-                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+                  className="w-full border border-input bg-background px-3 py-2.5 text-sm"
                   placeholder="Cidade ou bairro"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Mensagem</label>
+                <label className="mb-1 block type-eyebrow">Mensagem</label>
                 <textarea
                   rows={3}
                   maxLength={500}
                   value={form.message}
                   onChange={(e) => setForm({ ...form, message: e.target.value })}
-                  className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+                  className="w-full resize-none border border-input bg-background px-3 py-2.5 text-sm"
                   placeholder="Conte rapidamente o que você procura"
                 />
               </div>
               <button
                 type="submit"
                 disabled={loading}
-                className="btn-bounce w-full rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-glow disabled:opacity-60"
+                className="btn-bounce w-full rounded-full bg-primary px-6 py-3 text-sm font-bold text-primary-foreground disabled:opacity-60"
               >
                 {loading ? (
                   <span className="inline-flex items-center gap-2">
@@ -493,7 +821,7 @@ function LeadCapture() {
                 </a>
               )}
 
-              <p className="text-center text-[10px] text-muted-foreground">
+              <p className="text-center type-micro text-muted-foreground">
                 Ao enviar, você concorda em receber contato sobre aulas e horários.
               </p>
             </>
@@ -565,20 +893,18 @@ function CoachApply() {
   };
 
   return (
-    <section id="trabalhe-conosco" className="mx-auto max-w-6xl px-6 py-20">
-      <div className="grid gap-10 md:grid-cols-2 md:items-center">
-        <div className="space-y-4">
-          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium">
-            <Trophy className="h-3 w-3" /> Trabalhe conosco
-          </span>
-          <h2 className="text-4xl font-bold leading-tight md:text-5xl">
-            É professor de tênis? Venha fazer parte do nosso time.
+    <section id="trabalhe-conosco" className="mx-auto max-w-6xl px-6 py-24 md:px-10 md:py-32">
+      <div className="grid gap-12 md:grid-cols-2 md:items-center">
+        <div>
+          <p data-reveal className="type-eyebrow flex items-center gap-2"><Trophy className="h-3.5 w-3.5" /> Trabalhe conosco</p>
+          <h2 data-reveal className="mt-3 text-4xl font-bold leading-[.9] tracking-[-.03em] md:text-6xl" style={{ transitionDelay: "60ms" }}>
+            É professor de tênis?
           </h2>
-          <p className="text-muted-foreground">
+          <p data-reveal className="mt-5 max-w-md text-muted-foreground" style={{ transitionDelay: "120ms" }}>
             Coaches, professores e profissionais que querem trabalhar na nossa quadra podem enviar
             o currículo aqui. Vamos avaliar e entrar em contato.
           </p>
-          <ul className="space-y-2 text-sm text-muted-foreground">
+          <ul data-reveal className="mt-6 space-y-2 text-sm text-muted-foreground" style={{ transitionDelay: "180ms" }}>
             <li>• Estrutura completa e agenda integrada</li>
             <li>• Pagamentos e alunos organizados pela plataforma</li>
             <li>• Análise rápida da sua candidatura</li>
@@ -586,12 +912,14 @@ function CoachApply() {
         </div>
 
         <form
+          data-reveal
           onSubmit={submit}
-          className="space-y-3 rounded-3xl border border-border bg-card p-6 shadow-soft"
+          className="space-y-3 bg-card p-6 md:p-8"
+          style={{ transitionDelay: "140ms" }}
         >
           {sent ? (
             <div className="space-y-3 py-6 text-center">
-              <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-primary text-2xl">✓</div>
+              <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-lime/20 text-2xl text-foreground">✓</div>
               <h3 className="text-xl font-bold">Candidatura enviada!</h3>
               <p className="text-sm text-muted-foreground">Em breve entraremos em contato.</p>
               <button
@@ -605,47 +933,47 @@ function CoachApply() {
           ) : (
             <>
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Nome completo *</label>
+                <label className="mb-1 block type-eyebrow">Nome completo *</label>
                 <input required maxLength={120} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm" placeholder="Seu nome" />
+                  className="w-full border border-input bg-background px-3 py-2.5 text-sm" placeholder="Seu nome" />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">E-mail *</label>
+                  <label className="mb-1 block type-eyebrow">E-mail *</label>
                   <input required type="email" maxLength={255} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm" placeholder="seu@email.com" />
+                    className="w-full border border-input bg-background px-3 py-2.5 text-sm" placeholder="seu@email.com" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">WhatsApp *</label>
+                  <label className="mb-1 block type-eyebrow">WhatsApp *</label>
                   <input required type="tel" maxLength={20} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm" placeholder="(51) 99999-9999" />
+                    className="w-full border border-input bg-background px-3 py-2.5 text-sm" placeholder="(51) 99999-9999" />
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Cidade</label>
+                <label className="mb-1 block type-eyebrow">Cidade</label>
                 <input maxLength={120} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })}
-                  className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm" placeholder="Cidade ou bairro" />
+                  className="w-full border border-input bg-background px-3 py-2.5 text-sm" placeholder="Cidade ou bairro" />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Sobre você</label>
+                <label className="mb-1 block type-eyebrow">Sobre você</label>
                 <textarea rows={3} maxLength={800} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })}
-                  className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+                  className="w-full resize-none border border-input bg-background px-3 py-2.5 text-sm"
                   placeholder="Conte sua experiência, certificações, disponibilidade…" />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Currículo (PDF, DOC, imagem — até 10MB)</label>
+                <label className="mb-1 block type-eyebrow">Currículo (PDF, DOC, imagem — até 10MB)</label>
                 <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,application/pdf,image/*"
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary-foreground" />
-                {file && <p className="mt-1 text-[11px] text-muted-foreground">{file.name} · {(file.size / 1024).toFixed(0)} KB</p>}
+                  className="w-full border border-input bg-background px-3 py-2 text-sm file:mr-3 file:rounded-full file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary-foreground" />
+                {file && <p className="mt-1 type-micro text-muted-foreground">{file.name} · {(file.size / 1024).toFixed(0)} KB</p>}
               </div>
               <button type="submit" disabled={loading}
-                className="btn-bounce w-full rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-glow disabled:opacity-60">
+                className="btn-bounce w-full rounded-full bg-primary px-6 py-3 text-sm font-bold text-primary-foreground disabled:opacity-60">
                 {loading ? (
                   <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Enviando…</span>
                 ) : "Enviar candidatura"}
               </button>
-              <p className="text-center text-[10px] text-muted-foreground">
+              <p className="text-center type-micro text-muted-foreground">
                 Seus dados serão analisados pela equipe da quadra.
               </p>
             </>
@@ -656,43 +984,32 @@ function CoachApply() {
   );
 }
 
-
+/* ============================================================================
+ * CTA-BLOCK (PK) — bloco de largura total que inverte no hover, seta desliza.
+ * ========================================================================== */
 function CTA() {
   return (
-    <section id="cta" className="mx-auto max-w-6xl px-6 py-24">
-      <div className="relative overflow-hidden rounded-3xl border border-border bg-foreground p-12 text-background shadow-glow md:p-16">
-        <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-primary/40 blur-3xl" />
-        <div className="relative max-w-xl">
-          <span className="inline-flex items-center gap-2 rounded-full bg-primary/20 px-3 py-1 text-xs font-semibold text-primary">
-            <Sparkles className="h-3 w-3" /> Comece hoje
+    <section id="cta" className="py-24 md:py-32">
+      <Link
+        to="/auth"
+        search={{ mode: "signup" } as any}
+        onClick={() => playPop()}
+        className="group flex min-h-[11rem] w-full items-center justify-center border-y-2 border-foreground text-foreground transition-colors duration-500 ease-[cubic-bezier(.625,.05,0,1)] hover:bg-ink hover:text-white md:min-h-[15rem]"
+      >
+        <span data-reveal className="flex items-center px-6 text-center text-[clamp(2rem,6vw,4.5rem)] font-bold uppercase leading-none tracking-[-.02em]">
+          Criar conta grátis
+          <span className="inline-block w-0 overflow-hidden opacity-0 transition-all duration-500 ease-[cubic-bezier(.625,.05,0,1)] group-hover:ml-5 group-hover:w-[1em] group-hover:opacity-100">
+            →
           </span>
-          <h2 className="mt-4 text-4xl font-bold md:text-5xl">Sua próxima aula está a 2 toques.</h2>
-          <p className="mt-4 text-background/80">
-            Crie sua conta grátis, escolha o melhor horário e venha jogar.
-            Quem chega no On Tennis, joga mais — e melhor.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              to="/auth"
-              onClick={() => playPop()}
-              className="btn-bounce rounded-full bg-primary px-6 py-3 font-semibold text-primary-foreground"
-            >
-              Criar conta grátis
-            </Link>
-            <Link
-              to="/auth"
-              onClick={() => playPop()}
-              className="btn-bounce rounded-full border border-background/30 bg-transparent px-6 py-3 font-semibold text-background"
-            >
-              Já tenho conta
-            </Link>
-          </div>
-        </div>
-      </div>
+        </span>
+      </Link>
     </section>
   );
 }
 
+/* ============================================================================
+ * FOOTER — tipografia display (PK) + sociais do site_settings.
+ * ========================================================================== */
 function Footer() {
   const [socials, setSocials] = useState<{ key: string; url: string; icon: React.ReactNode; label: string }[]>([]);
 
@@ -716,46 +1033,75 @@ function Footer() {
   }, []);
 
   return (
-    <footer className="border-t border-border">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 text-sm text-muted-foreground md:flex-row">
-        <Logo className="h-8" />
-        {socials.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            {socials.map((s) => (
-              <a
-                key={s.key}
-                href={s.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={s.label}
-                className="btn-bounce inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-foreground transition hover:bg-primary hover:text-primary-foreground"
-              >
-                {s.icon}
-              </a>
-            ))}
-          </div>
-        )}
-        <p>© {new Date().getFullYear()} On Tennis. Todos os direitos reservados.</p>
+    <footer className="bg-ink text-white">
+      <div className="mx-auto max-w-6xl px-6 pb-8 pt-16 md:px-10 md:pt-24">
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          <nav className="flex flex-wrap gap-6 text-sm font-bold text-white/60">
+            <a href="#features" className="transition-colors hover:text-white">Recursos</a>
+            <a href="#how" className="transition-colors hover:text-white">Como funciona</a>
+            <a href="#contato" className="transition-colors hover:text-white">Contato</a>
+            <a href="#trabalhe-conosco" className="transition-colors hover:text-white">Trabalhe conosco</a>
+          </nav>
+          {socials.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {socials.map((s) => (
+                <a
+                  key={s.key}
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={s.label}
+                  className="btn-bounce inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/25 text-white transition-colors hover:bg-acid hover:text-ink"
+                >
+                  {s.icon}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <p data-reveal className="mt-14 text-[clamp(3rem,11vw,9rem)] font-bold leading-[.82] tracking-[-.04em]">
+          Jogo, set e<br /><span className="text-acid">match.</span>
+        </p>
+
+        <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-white/15 pt-6 text-xs text-white/50">
+          <Logo className="h-7" />
+          <p>© {new Date().getFullYear()} On Tennis. Todos os direitos reservados.</p>
+        </div>
       </div>
     </footer>
   );
 }
 
-function BounceButton({
-  children,
-  className = "",
-  ...rest
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+function FloatingWhatsApp() {
+  const [whatsapp, setWhatsapp] = useState("");
+  const [whatsappMsg, setWhatsappMsg] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("site_settings")
+        .select("key, value")
+        .in("key", ["whatsapp_number", "whatsapp_message"]);
+      const map = Object.fromEntries(((data as any[]) ?? []).map((r) => [r.key, r.value ?? ""]));
+      setWhatsapp((map["whatsapp_number"] ?? "").replace(/[^\d]/g, ""));
+      setWhatsappMsg(map["whatsapp_message"] ?? "");
+    })();
+  }, []);
+
+  if (!whatsapp) return null;
+  const href = `https://wa.me/${whatsapp}${whatsappMsg ? `?text=${encodeURIComponent(whatsappMsg)}` : ""}`;
   return (
-    <button
-      {...rest}
-      onClick={(e) => {
-        playPop();
-        rest.onClick?.(e);
-      }}
-      className={`btn-bounce inline-flex items-center justify-center rounded-full ${className}`}
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() => playPop()}
+      aria-label="Reservar pelo WhatsApp"
+      className="btn-bounce fixed bottom-5 right-5 z-50 inline-flex items-center gap-2 rounded-full bg-[#25D366] px-5 py-3.5 text-sm font-semibold text-white hover:bg-[#1ebe5b]"
     >
-      {children}
-    </button>
+      <MessageCircle className="h-5 w-5" />
+      <span className="hidden sm:inline">Reservar pelo WhatsApp</span>
+    </a>
   );
 }

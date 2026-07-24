@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
 import { format } from "date-fns";
+import { PageHeader } from "@/components/PageHeader";
 
 export const Route = createFileRoute("/_authenticated/admin/feedbacks")({
   component: AdminFeedbacks,
@@ -50,7 +51,7 @@ function AdminFeedbacks() {
   const update = async (id: string, patch: Partial<Feedback>) => {
     playPop();
     const { error } = await (supabase as any).from("professor_feedback").update(patch).eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível atualizar o feedback. Tente de novo.");
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } as Feedback : r)));
     toast.success("Atualizado");
   };
@@ -59,7 +60,7 @@ function AdminFeedbacks() {
     playPop();
     if (!confirm("Excluir este feedback?")) return;
     const { error } = await (supabase as any).from("professor_feedback").delete().eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível remover o feedback. Tente de novo.");
     setRows((rs) => rs.filter((r) => r.id !== id));
     toast.success("Removido");
   };
@@ -71,41 +72,42 @@ function AdminFeedbacks() {
   });
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold">Feedbacks dos alunos</h1>
-          <p className="text-muted-foreground">Aprove e destaque depoimentos para divulgar na landing page.</p>
-        </div>
-        <div className="flex gap-2 text-sm">
-          {(["all", "pending", "featured"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => { playPop(); setFilter(f); }}
-              className={`btn-bounce rounded-full border px-3 py-1.5 ${filter === f ? "border-primary bg-primary/15 text-primary" : "border-border bg-card"}`}
-            >
-              {f === "all" ? "Todos" : f === "pending" ? "Pendentes" : "Destacados"}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="Admin · Feedbacks"
+        title="Feedbacks dos alunos"
+        subtitle="Aprove e destaque depoimentos para divulgar na landing page."
+        actions={
+          <>
+            {(["all", "pending", "featured"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => { playPop(); setFilter(f); }}
+                className={`btn-bounce rounded-full border px-3 py-1.5 type-small ${filter === f ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-accent"}`}
+              >
+                {f === "all" ? "Todos" : f === "pending" ? "Pendentes" : "Destacados"}
+              </button>
+            ))}
+          </>
+        }
+      />
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-4 auto-rows-fr md:grid-cols-2">
         {filtered.map((r) => (
-          <div key={r.id} className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+          <div key={r.id} className="plane h-full">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="flex items-center gap-2 text-sm">
+                <div className="flex items-center gap-2 type-small">
                   <span className="font-semibold">Para:</span>
                   <span>{names[r.professor_id] ?? "—"}</span>
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="type-micro text-muted-foreground">
                   De: {r.is_anonymous ? "Anônimo" : (r.student_id ? (names[r.student_id] ?? "—") : "—")}
                   {" · "}
-                  {format(new Date(r.created_at), "dd/MM/yy HH:mm")}
+                  <span className="type-data">{format(new Date(r.created_at), "dd/MM/yy HH:mm")}</span>
                 </div>
               </div>
-              <button onClick={() => remove(r.id)} className="btn-bounce rounded-md border border-border p-1.5 hover:bg-destructive/10">
+              <button onClick={() => remove(r.id)} className="btn-bounce rounded-full border border-border p-1.5 hover:bg-destructive/10">
                 <Trash2 className="h-3.5 w-3.5 text-destructive" />
               </button>
             </div>
@@ -114,17 +116,17 @@ function AdminFeedbacks() {
                 <Star key={n} className={`h-4 w-4 ${n <= r.rating ? "fill-primary text-primary" : "text-muted-foreground/40"}`} />
               ))}
             </div>
-            {r.comment && <p className="text-sm text-muted-foreground italic">"{r.comment}"</p>}
-            <div className="mt-4 flex flex-wrap gap-2 text-xs">
-              <span className={`rounded-full px-2 py-0.5 ${r.public_consent ? "bg-green-500/15 text-green-500" : "bg-muted text-muted-foreground"}`}>
+            {r.comment && <p className="type-small text-muted-foreground italic">"{r.comment}"</p>}
+            <div className="mt-4 flex flex-wrap gap-2 type-micro">
+              <span className={`rounded-full px-2 py-0.5 ${r.public_consent ? "bg-secondary text-foreground" : "bg-muted text-muted-foreground"}`}>
                 {r.public_consent ? "Aluno autorizou divulgar" : "Sem autorização pública"}
               </span>
-              {r.approved_professor && <span className="rounded-full bg-primary/15 px-2 py-0.5 text-primary">Aprovado prof.</span>}
+              {r.approved_professor && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-foreground">Aprovado prof.</span>}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 onClick={() => update(r.id, { approved_admin: !r.approved_admin })}
-                className={`btn-bounce inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold ${r.approved_admin ? "border-primary bg-primary/15 text-primary" : "border-border"}`}
+                className={`btn-bounce inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 type-small font-semibold ${r.approved_admin ? "border-primary bg-primary text-primary-foreground" : "border-border hover:bg-accent"}`}
               >
                 {r.approved_admin ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
                 {r.approved_admin ? "Aprovado" : "Aprovar"}
@@ -133,7 +135,7 @@ function AdminFeedbacks() {
                 disabled={!r.public_consent || !r.approved_admin}
                 onClick={() => update(r.id, { featured: !r.featured })}
                 title={!r.public_consent ? "Aluno não autorizou divulgação" : !r.approved_admin ? "Aprove primeiro" : ""}
-                className={`btn-bounce inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${r.featured ? "border-yellow-500 bg-yellow-500/15 text-yellow-600" : "border-border"}`}
+                className={`btn-bounce inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 type-small font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${r.featured ? "border-primary bg-primary text-primary-foreground" : "border-border hover:bg-accent"}`}
               >
                 <Sparkles className="h-3 w-3" />
                 {r.featured ? "Destacado na landing" : "Destacar na landing"}
@@ -142,7 +144,7 @@ function AdminFeedbacks() {
           </div>
         ))}
         {filtered.length === 0 && (
-          <div className="col-span-full rounded-2xl border border-dashed border-border bg-card/50 p-12 text-center text-muted-foreground">
+          <div className="col-span-full rounded-2xl border border-dashed border-border bg-secondary p-12 text-center type-small text-muted-foreground">
             Nenhum feedback {filter === "pending" ? "pendente" : filter === "featured" ? "destacado" : "ainda"}.
           </div>
         )}

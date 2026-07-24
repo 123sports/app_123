@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Loader2, Plus, Save, Star, Trash2, UserCog } from "lucide-react";
+import { Loader2, Plus, Save, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 
+// "Dados dos Coaches" foi unificado dentro de "Equipe" (aba). A rota antiga
+// redireciona para manter links/bookmarks funcionando.
 export const Route = createFileRoute("/_authenticated/admin/coach-perfis")({
-  component: AdminCoachPerfis,
+  beforeLoad: () => {
+    throw redirect({ to: "/admin/equipe" });
+  },
 });
 
 type Coach = {
@@ -29,7 +33,7 @@ type Coach = {
 
 type StaffOption = { id: string; full_name: string | null; email: string };
 
-function AdminCoachPerfis() {
+export function CoachProfilesPanel() {
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [editing, setEditing] = useState<Coach | null>(null);
@@ -91,33 +95,28 @@ function AdminCoachPerfis() {
       setEditing(null);
       load();
     } catch (e: any) {
-      toast.error(e.message);
+      toast.error(e?.message ?? "Não foi possível salvar a ficha do coach. Tente de novo.");
     }
   };
 
   const remove = async (user_id: string) => {
     if (!confirm("Excluir esta ficha de coach?")) return;
     const { error } = await supabase.from("coach_profiles").delete().eq("user_id", user_id);
-    if (error) toast.error(error.message);
+    if (error) toast.error(error?.message ?? "Não foi possível excluir a ficha. Tente de novo.");
     else { toast.success("Excluído"); load(); }
   };
 
   return (
-    <div className="space-y-6 animate-float-in">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <UserCog className="h-7 w-7 text-primary" /> Dados dos Coaches
-          </h1>
-          <p className="text-muted-foreground">
-            Os dados aqui cadastrados vão preencher automaticamente os contratos de aulas (CONTRATADO + LOCAL).
-            Defina um coach como padrão para ser usado por padrão em novos contratos.
-          </p>
-        </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="type-small max-w-2xl text-muted-foreground">
+          As fichas aqui cadastradas preenchem automaticamente os contratos de aulas (CONTRATADO + LOCAL).
+          Defina um coach como padrão para novos contratos.
+        </p>
         <Button onClick={() => setEditing(newCoach())}>
           <Plus className="h-4 w-4" /> Nova ficha
         </Button>
-      </header>
+      </div>
 
       {loading ? (
         <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
@@ -126,9 +125,9 @@ function AdminCoachPerfis() {
           Nenhum coach cadastrado. Clique em "Nova ficha" para começar.
         </CardContent></Card>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 auto-rows-fr">
           {coaches.map((c) => (
-            <Card key={c.user_id}>
+            <Card key={c.user_id} className="h-full">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -138,14 +137,14 @@ function AdminCoachPerfis() {
                     </CardTitle>
                     <CardDescription>{c.cpf_cnpj ?? "—"} · {c.venue_name ?? "—"}</CardDescription>
                   </div>
-                  <span className={`text-xs rounded-full px-2 py-0.5 ${c.active ? "bg-green-500/20 text-green-700 dark:text-green-300" : "bg-muted text-muted-foreground"}`}>
+                  <span className={`type-micro type-eyebrow rounded-full px-2 py-0.5 ${c.active ? "bg-green-500/20 text-green-700 dark:text-green-300" : "bg-muted text-muted-foreground"}`}>
                     {c.active ? "Ativo" : "Inativo"}
                   </span>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-1 text-sm text-muted-foreground">
+              <CardContent className="space-y-1 type-small text-muted-foreground">
                 <div>{c.email ?? "sem e-mail"} · {c.phone ?? "sem telefone"}</div>
-                <div className="text-xs">{c.address ?? "sem endereço"}</div>
+                <div className="type-micro">{c.address ?? "sem endereço"}</div>
                 <div className="flex gap-2 pt-2">
                   <Button size="sm" variant="outline" onClick={() => setEditing(c)}>Editar</Button>
                   <Button size="sm" variant="destructive" onClick={() => remove(c.user_id)}>

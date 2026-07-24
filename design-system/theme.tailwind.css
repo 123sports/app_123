@@ -1,0 +1,163 @@
+/* ============================================================================
+ * ON COURT — ponte Tailwind v4
+ * Importe DEPOIS de tokens.css no styles.css do app:
+ *
+ *   @import "./design-system/tokens.css";
+ *   @import "./design-system/theme.tailwind.css";
+ *
+ * Mapeia os tokens ON para o namespace @theme do Tailwind 4, substituindo o
+ * mapeamento shadcn atual. As utilities existentes (bg-background, text-primary,
+ * border-border, rounded-lg…) continuam funcionando, agora alimentadas pelo DS.
+ * ========================================================================== */
+
+@theme inline {
+  /* ----- cor: compatibilidade com o vocabulário shadcn já usado no app ----- */
+  --color-background: var(--on-bg);
+  --color-foreground: var(--on-fg);
+
+  --color-card: var(--on-panel);
+  --color-card-foreground: var(--on-fg);
+  --color-popover: var(--on-panel);
+  --color-popover-foreground: var(--on-fg);
+
+  --color-primary: var(--on-accent);
+  --color-primary-foreground: var(--on-accent-fg);
+
+  --color-secondary: var(--on-wash);
+  --color-secondary-foreground: var(--on-fg);
+
+  --color-muted: var(--on-wash);
+  --color-muted-foreground: var(--on-fg-muted);
+
+  --color-accent: var(--on-accent);
+  --color-accent-foreground: var(--on-accent-fg);
+
+  --color-destructive: var(--on-danger);
+  --color-destructive-foreground: var(--on-light);
+
+  --color-border: var(--on-hairline);
+  --color-input: var(--on-hairline);
+  --color-ring: var(--on-focus);
+
+  /* ----- cor: vocabulário próprio do DS ----- */
+  --color-ink: var(--on-ink);
+  --color-surface: var(--on-surface);
+  --color-panel: var(--on-panel);
+  --color-hairline: var(--on-hairline);
+  --color-wash: var(--on-wash);
+  --color-acid: var(--on-accent-acid);
+  --color-lime: var(--on-accent-lime);
+  --color-clay: var(--on-accent-clay);
+  --color-sky: var(--on-accent-sky);
+
+  /* ----- raios: só dois. rounded-* intermediários morrem no lint ----- */
+  --radius-none: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --radius-3xl: 0;
+  --radius-full: var(--on-radius-pill);
+
+  /* ----- tipografia ----- */
+  --font-sans: var(--on-font);
+  --font-display: var(--on-font);
+
+  --text-micro: var(--on-fs-micro);
+  --text-eyebrow: var(--on-fs-eyebrow);
+  --text-small: var(--on-fs-small);
+  --text-body: var(--on-fs-body);
+  --text-h3: var(--on-fs-3);
+  --text-h2: var(--on-fs-2);
+  --text-h1: var(--on-fs-1);
+  --text-display: var(--on-fs-display);
+
+  /* ----- motion ----- */
+  --ease-on: var(--on-ease);
+  --ease-on-click: var(--on-ease-click);
+  --ease-on-expo-io: var(--on-ease-expo-io);
+  --ease-on-expo-out: var(--on-ease-expo-out);
+}
+
+/* ===== utilities do DS ===== */
+
+/* Papéis tipográficos — a página usa papel, não tamanho avulso */
+@utility type-display {
+  font-size: var(--on-fs-display);
+  line-height: var(--on-lh-display);
+  letter-spacing: var(--on-ls-display);
+  font-weight: var(--on-weight-ui);
+}
+@utility type-h1 {
+  font-size: var(--on-fs-1);
+  line-height: var(--on-lh-heading);
+  letter-spacing: var(--on-ls-heading);
+  font-weight: var(--on-weight-ui);
+}
+@utility type-h2 {
+  font-size: var(--on-fs-2);
+  line-height: var(--on-lh-heading);
+  letter-spacing: var(--on-ls-heading);
+  font-weight: var(--on-weight-ui);
+}
+@utility type-h3 {
+  font-size: var(--on-fs-3);
+  line-height: var(--on-lh-heading);
+  font-weight: var(--on-weight-ui);
+}
+@utility type-eyebrow {
+  font-size: var(--on-fs-eyebrow);
+  letter-spacing: var(--on-ls-caps);
+  text-transform: uppercase;
+  font-weight: var(--on-weight-ui);
+  color: var(--on-fg-muted);
+}
+@utility type-body { font-size: var(--on-fs-body); line-height: var(--on-lh-body); }
+@utility type-small { font-size: var(--on-fs-small); line-height: var(--on-lh-body); }
+@utility type-micro { font-size: var(--on-fs-micro); line-height: 1.1; }
+@utility type-data {
+  font-weight: var(--on-weight-data);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Planos — o card do DS (substitui rounded-*/border/bg-card/shadow-soft manual) */
+@utility plane {
+  background: var(--on-panel);
+  border: var(--on-border);
+  border-radius: 0;
+  padding: var(--on-pad-card);
+}
+@utility plane-hero { padding: var(--on-pad-hero); }
+@utility plane-compact { padding: var(--on-pad-card-compact); }
+@utility plane-inverse {
+  background: var(--on-panel-inverse);
+  color: var(--on-fg-inverse);
+}
+@utility hairline-t { border-top: var(--on-border); }
+@utility hairline-b { border-bottom: var(--on-border); }
+
+/* Botão base (o componente Button do kit implementa por cima disso) */
+@utility btn-on {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--on-gap-2);
+  min-height: var(--on-control-h);
+  padding: var(--on-btn-pad);
+  border-radius: var(--on-radius-pill);
+  font-weight: var(--on-weight-ui);
+  overflow: clip;
+  transition: transform var(--on-dur-half) var(--on-ease),
+              background-color var(--on-dur-half) var(--on-ease),
+              color var(--on-dur-half) var(--on-ease);
+}
+
+/* Ritmo de página do app — um só padrão para os dois shells */
+@utility page-app {
+  max-width: var(--on-container-app);
+  margin-inline: auto;
+  padding-inline: var(--on-page-x);
+  padding-block: var(--on-space-page);
+}
+@utility stack-app { display: flex; flex-direction: column; gap: var(--on-space-app); }

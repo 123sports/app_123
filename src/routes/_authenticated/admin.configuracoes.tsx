@@ -4,6 +4,7 @@ import { Loader2, Save, MessageCircle, Instagram, Facebook, Youtube, Music2, Glo
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
+import { PageHeader } from "@/components/PageHeader";
 
 export const Route = createFileRoute("/_authenticated/admin/configuracoes")({
   component: ConfigPage,
@@ -138,27 +139,26 @@ function ConfigPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold">Configurações</h1>
-        <p className="text-sm text-muted-foreground">
-          Dados públicos exibidos para os alunos e leads na landing page.
-        </p>
-      </header>
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="Admin · Configurações"
+        title="Configurações"
+        subtitle="Dados públicos exibidos para os alunos e leads na landing page."
+      />
 
-      <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+      <section className="plane">
         <div className="mb-3 flex items-center gap-2">
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
             <MessageCircle className="h-4 w-4" />
           </span>
           <div>
-            <h2 className="font-semibold">WhatsApp de contato</h2>
-            <p className="text-xs text-muted-foreground">
+            <h2 className="type-h3">WhatsApp de contato</h2>
+            <p className="type-micro text-muted-foreground">
               Aparece como botão "Falar no WhatsApp" abaixo do formulário de pré-cadastro.
             </p>
           </div>
         </div>
-        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+        <label className="mb-1 block type-eyebrow text-muted-foreground">
           Número com DDI e DDD (ex.: 5551999999999)
         </label>
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -169,11 +169,11 @@ function ConfigPage() {
             className="flex-1 rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
           />
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
+        <p className="mt-2 type-micro text-muted-foreground">
           Deixe em branco para esconder o botão da landing page.
         </p>
 
-        <label className="mt-4 mb-1 block text-xs font-medium text-muted-foreground">
+        <label className="mt-4 mb-1 block type-eyebrow text-muted-foreground">
           Mensagem padrão enviada ao clicar
         </label>
         <textarea
@@ -187,7 +187,7 @@ function ConfigPage() {
         <button
           onClick={save}
           disabled={saving}
-          className="btn-bounce mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow disabled:opacity-60"
+          className="btn-bounce mt-3 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Salvar WhatsApp
@@ -195,20 +195,20 @@ function ConfigPage() {
       </section>
 
 
-      <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+      <section className="plane">
         <div className="mb-3 flex items-center gap-2">
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
             <Instagram className="h-4 w-4" />
           </span>
           <div>
-            <h2 className="font-semibold">Redes sociais</h2>
-            <p className="text-xs text-muted-foreground">
+            <h2 className="type-h3">Redes sociais</h2>
+            <p className="type-micro text-muted-foreground">
               Links que aparecem no rodapé da landing page. Deixe em branco para esconder.
             </p>
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           <SocialField
             icon={<Instagram className="h-4 w-4" />}
             label="Instagram"
@@ -249,29 +249,29 @@ function ConfigPage() {
         <button
           onClick={saveSocials}
           disabled={savingSocials}
-          className="btn-bounce mt-4 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow disabled:opacity-60"
+          className="btn-bounce mt-4 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
           {savingSocials ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Salvar redes sociais
         </button>
       </section>
 
-      <section className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+      <section className="plane">
         <div className="mb-3 flex items-center gap-2">
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
             <Shield className="h-4 w-4" />
           </span>
           <div>
-            <h2 className="font-semibold">Dados visíveis para professores</h2>
-            <p className="text-xs text-muted-foreground">
+            <h2 className="type-h3">Dados visíveis para professores</h2>
+            <p className="type-micro text-muted-foreground">
               Por padrão, professores veem apenas nome, foto, nível e bio dos alunos. Marque abaixo o que deseja liberar.
             </p>
           </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           {PROF_FIELDS.map((f) => (
-            <label key={f.key} className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-background/50 px-3 py-2.5 text-sm">
+            <label key={f.key} className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-secondary px-3 py-2.5 text-sm">
               <span className="inline-flex items-center gap-2">
                 <Eye className="h-4 w-4 text-muted-foreground" /> {f.label}
               </span>
@@ -288,7 +288,7 @@ function ConfigPage() {
         <button
           onClick={saveProfVis}
           disabled={savingProf}
-          className="btn-bounce mt-4 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow disabled:opacity-60"
+          className="btn-bounce mt-4 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
           {savingProf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Salvar permissões
@@ -309,7 +309,7 @@ function SocialField({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+      <span className="mb-1 flex items-center gap-1.5 type-eyebrow text-muted-foreground">
         {icon} {label}
       </span>
       <input

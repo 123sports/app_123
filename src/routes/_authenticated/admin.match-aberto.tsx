@@ -6,6 +6,7 @@ import { playPop } from "@/lib/sfx";
 import { Loader2, Check, X, Users, Clock, CalendarDays, Trash2 } from "lucide-react";
 import { MatchDrawCard } from "@/components/MatchDrawCard";
 import { PlayerStatsLine, prefetchPlayerStats } from "@/components/PlayerStatsLine";
+import { PageHeader } from "@/components/PageHeader";
 
 export const Route = createFileRoute("/_authenticated/admin/match-aberto")({
   component: AdminMatchAberto,
@@ -87,7 +88,7 @@ function AdminMatchAberto() {
     }
     if (reason) patch.cancelled_reason = reason;
     const { error } = await (supabase as any).from("open_matches").update(patch).eq("id", id);
-    if (error) toast.error(error.message);
+    if (error) toast.error(error?.message ?? "Não foi possível atualizar. Tente de novo.");
     else toast.success("Atualizado!");
   };
 
@@ -95,7 +96,7 @@ function AdminMatchAberto() {
     playPop();
     if (!confirm("Excluir esta vaga?")) return;
     const { error } = await (supabase as any).from("open_matches").delete().eq("id", id);
-    if (error) toast.error(error.message);
+    if (error) toast.error(error?.message ?? "Não foi possível excluir. Tente de novo.");
     else toast.success("Excluído.");
   };
 
@@ -112,13 +113,12 @@ function AdminMatchAberto() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Match Aberto</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Vagas que os alunos criaram para jogar entre si. Aprove para que apareçam na plataforma.
-        </p>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="Admin · Match Aberto"
+        title="Match Aberto"
+        subtitle="Vagas que os alunos criaram para jogar entre si. Aprove para que apareçam na plataforma."
+      />
 
       <div className="flex flex-wrap gap-2">
         {(["pendente", "aprovado", "fechado", "cancelado", "todos"] as const).map((t) => (
@@ -141,9 +141,9 @@ function AdminMatchAberto() {
           Nada por aqui.
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {visible.map((m) => (
-            <div key={m.id} className="rounded-2xl border border-border bg-card p-4 shadow-soft">
+            <div key={m.id} className="plane">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-sm font-semibold">
@@ -158,12 +158,12 @@ function AdminMatchAberto() {
                   {m.notes && <p className="max-w-xl text-sm text-muted-foreground">{m.notes}</p>}
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Users className="h-3.5 w-3.5" />
-                    {(m.participants?.length ?? 0)}/{m.max_players}
+                    <span className="type-data">{(m.participants?.length ?? 0)}/{m.max_players}</span>
                   </div>
                   {m.participants && m.participants.length > 0 && (
                     <ul className="flex flex-wrap gap-1.5">
                       {m.participants.map((p) => (
-                        <li key={p.user_id} className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2 py-1 text-[11px]">
+                        <li key={p.user_id} className="type-micro inline-flex items-center gap-1.5 rounded-full bg-secondary px-2 py-1">
                           <span>{p.full_name ?? "Aluno"}</span>
                           <PlayerStatsLine userId={p.user_id} compact />
                         </li>
@@ -175,7 +175,7 @@ function AdminMatchAberto() {
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${statusBadge(m.status)}`}>{m.status}</span>
+                  <span className={`type-micro rounded-full px-2 py-0.5 font-semibold uppercase ${statusBadge(m.status)}`}>{m.status}</span>
                   <div className="flex flex-wrap gap-1">
                     {m.status === "pendente" && (
                       <>

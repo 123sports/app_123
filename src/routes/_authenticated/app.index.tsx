@@ -65,7 +65,7 @@ function Dashboard() {
     const { error } = await (supabase.from("bookings") as any).update({
       confirmed_at: new Date().toISOString(), status: "confirmada",
     }).eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) return toast.error(error?.message ?? "Não foi possível confirmar sua presença. Tente de novo.");
     toast.success("Presença confirmada!");
     load();
   };
@@ -73,11 +73,10 @@ function Dashboard() {
   const initials = (name || "?").split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
 
   return (
-    <div className="space-y-8 animate-float-in">
-      <section className="relative overflow-hidden rounded-3xl border border-border bg-card p-8 shadow-soft">
-        <div className="flex items-center gap-6">
+    <div className="space-y-4 animate-float-in">
+      <section className="relative overflow-hidden py-2">
+        <div className="flex items-center gap-4">
           <div className="relative shrink-0">
-            <div className="absolute -inset-1 rounded-full bg-gradient-to-br from-primary via-accent to-primary opacity-70 blur-md" aria-hidden />
             <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-primary bg-secondary text-3xl font-bold text-primary-foreground sm:h-36 sm:w-36">
               {avatar ? (
                 <img src={avatar} alt={name} className="h-full w-full object-cover" />
@@ -88,15 +87,15 @@ function Dashboard() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm text-muted-foreground">Olá,</p>
-            <h1 className="mt-1 truncate text-3xl font-bold sm:text-4xl">{name || "jogador"}!</h1>
+            <h1 className="type-h2 mt-1 truncate">{name || "jogador"}!</h1>
             <p className="mt-2 max-w-md text-muted-foreground">
               Pronto pra entrar em quadra? Veja seus próximos horários ou agende um novo.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
-              <Link to="/app/agenda" className="btn-bounce rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow">
+              <Link to="/app/agenda" className="btn-bounce rounded-full bg-lime px-5 py-2.5 text-sm font-bold text-ink">
                 Reservar horário
               </Link>
-              <Link to="/app/perfil" className="btn-bounce rounded-full border border-border bg-background px-5 py-2.5 text-sm font-semibold">
+              <Link to="/app/perfil" className="btn-bounce rounded-full border border-border bg-secondary px-5 py-2.5 text-sm font-semibold hover:bg-accent">
                 Completar perfil
               </Link>
             </div>
@@ -106,22 +105,22 @@ function Dashboard() {
 
 
       {needsConfirm.length > 0 && (
-        <section className="rounded-2xl border-2 border-primary bg-primary/10 p-5 shadow-glow">
+        <section className="plane border-2 border-primary bg-primary/10">
           <div className="mb-3 flex items-center gap-2">
             <BellRing className="h-5 w-5 text-primary animate-bounce-ball" style={{ animationDuration: "2s" }} />
-            <h2 className="font-bold">Confirme sua presença</h2>
+            <h2 className="type-h3">Confirme sua presença</h2>
           </div>
-          <p className="mb-3 text-sm text-muted-foreground">
+          <p className="mb-3 type-small text-muted-foreground">
             Você tem reservas próximas. Confirme para garantir seu horário e evitar penalidades.
           </p>
           <ul className="space-y-2">
             {needsConfirm.map((b) => (
-              <li key={b.id} className="flex items-center justify-between rounded-xl bg-background/60 p-3">
+              <li key={b.id} className="flex items-center justify-between rounded-xl bg-secondary p-3">
                 <div>
-                  <div className="font-semibold">
+                  <div className="font-semibold type-data">
                     {format(new Date(b.booking_date + "T00:00:00"), "EEEE, dd/MM", { locale: ptBR })} · {String(b.start_hour).padStart(2, "0")}:00
                   </div>
-                  <div className="text-xs text-muted-foreground">{labelType(b.type)}</div>
+                  <div className="type-micro text-muted-foreground">{labelType(b.type)}</div>
                 </div>
                 <button
                   onClick={() => confirm(b.id)}
@@ -135,7 +134,7 @@ function Dashboard() {
         </section>
       )}
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid auto-rows-fr gap-4 md:grid-cols-3">
         <StatCard icon={Trophy} label="Total de reservas" value={stats.total} />
         <StatCard icon={CalendarDays} label="Este mês" value={stats.this_month} />
         <StatCard icon={Clock} label="Antecedência máx." value="1 mês" />
@@ -143,11 +142,11 @@ function Dashboard() {
 
       <section>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold">Próximas reservas</h2>
+          <h2 className="type-h2">Próximas reservas</h2>
           <Link to="/app/agenda" className="text-sm font-medium text-primary hover:underline">Ver agenda →</Link>
         </div>
         {upcoming.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">
+          <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
             <UserIcon className="mx-auto h-8 w-8 text-muted-foreground" />
             <p className="mt-3 text-muted-foreground">Nenhuma reserva ainda. Que tal agendar a primeira?</p>
             <Link to="/app/agenda" className="btn-bounce mt-4 inline-block rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground">
@@ -157,12 +156,12 @@ function Dashboard() {
         ) : (
           <ul className="space-y-3">
             {upcoming.map((b) => (
-              <li key={b.id} className="flex items-center justify-between rounded-2xl border border-border bg-card p-4 shadow-soft">
+              <li key={b.id} className="flex items-center justify-between plane plane-compact">
                 <div>
-                  <div className="text-sm text-muted-foreground">
+                  <div className="type-small text-muted-foreground">
                     {format(new Date(b.booking_date + "T00:00:00"), "EEEE, dd 'de' MMMM", { locale: ptBR })}
                   </div>
-                  <div className="font-semibold">
+                  <div className="font-semibold type-data">
                     {String(b.start_hour).padStart(2, "0")}:00 · {labelType(b.type)}
                   </div>
                 </div>
@@ -182,12 +181,12 @@ function Dashboard() {
 
 function StatCard({ icon: Icon, label, value }: { icon: any; label: string; value: any }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+    <div className="plane h-full">
       <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">{label}</div>
+        <div className="type-small text-muted-foreground">{label}</div>
         <Icon className="h-5 w-5 text-primary" />
       </div>
-      <div className="mt-2 text-3xl font-bold">{value}</div>
+      <div className="mt-2 type-data text-3xl font-bold">{value}</div>
     </div>
   );
 }

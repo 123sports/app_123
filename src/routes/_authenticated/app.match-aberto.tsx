@@ -6,6 +6,7 @@ import { playPop } from "@/lib/sfx";
 import { Loader2, Plus, Users, Clock, CalendarDays, X, LogIn, LogOut } from "lucide-react";
 import { MatchDrawCard } from "@/components/MatchDrawCard";
 import { PlayerStatsLine, prefetchPlayerStats } from "@/components/PlayerStatsLine";
+import { PageHeader } from "@/components/PageHeader";
 
 export const Route = createFileRoute("/_authenticated/app/match-aberto")({
   component: MatchAbertoPage,
@@ -109,7 +110,7 @@ function MatchAbertoPage() {
       notes: form.notes || null,
     });
     if (error) {
-      toast.error(error.message);
+      toast.error(error?.message ?? "Não foi possível abrir a vaga. Tente de novo.");
       return;
     }
     toast.success("Vaga aberta! Já apareceu pra galera 🎾");
@@ -122,7 +123,7 @@ function MatchAbertoPage() {
     const { error } = await (supabase as any)
       .from("open_match_participants")
       .insert({ match_id: m.id, user_id: me });
-    if (error) toast.error(error.message);
+    if (error) toast.error(error?.message ?? "Não foi possível entrar no match. Tente de novo.");
     else toast.success("Você entrou no match! 🎾");
   };
 
@@ -133,7 +134,7 @@ function MatchAbertoPage() {
       .delete()
       .eq("match_id", m.id)
       .eq("user_id", me);
-    if (error) toast.error(error.message);
+    if (error) toast.error(error?.message ?? "Não foi possível sair do match. Tente de novo.");
     else toast.success("Você saiu do match.");
   };
 
@@ -144,7 +145,7 @@ function MatchAbertoPage() {
       .from("open_matches")
       .update({ status: "cancelado", cancelled_reason: "Cancelado pelo criador" })
       .eq("id", m.id);
-    if (error) toast.error(error.message);
+    if (error) toast.error(error?.message ?? "Não foi possível cancelar a vaga. Tente de novo.");
     else toast.success("Vaga cancelada.");
   };
 
@@ -163,21 +164,20 @@ function MatchAbertoPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold">Match Aberto</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Veja quem tá afim de jogar — ou abra uma vaga e chame a galera.
-          </p>
-        </div>
-        <button
-          onClick={() => { playPop(); setCreating(true); }}
-          className="btn-bounce inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow"
-        >
-          <Plus className="h-4 w-4" /> Abrir vaga
-        </button>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        eyebrow="Agenda"
+        title="Match Aberto"
+        subtitle="Veja quem tá afim de jogar — ou abra uma vaga e chame a galera."
+        actions={
+          <button
+            onClick={() => { playPop(); setCreating(true); }}
+            className="btn-bounce inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" /> Abrir vaga
+          </button>
+        }
+      />
 
       <div className="flex gap-2">
         {(["abertos", "meus"] as const).map((t) => (
@@ -200,13 +200,13 @@ function MatchAbertoPage() {
           {tab === "abertos" ? "Nenhuma vaga aberta no momento. Que tal abrir a primeira?" : "Você ainda não abriu nenhuma vaga."}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid auto-rows-fr gap-4 md:grid-cols-2">
           {visible.map((m) => {
             const iAmIn = m.participants?.some((p) => p.user_id === me);
             const mine = m.creator_id === me;
             const full = (m.participants?.length ?? 0) >= m.max_players;
             return (
-              <div key={m.id} className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+              <div key={m.id} className="plane h-full">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2 text-sm font-semibold">
@@ -218,13 +218,13 @@ function MatchAbertoPage() {
                     <div className="mt-1 text-xs text-muted-foreground">por {m.creator_name}</div>
                     <div className="mt-1"><PlayerStatsLine userId={m.creator_id} /></div>
                   </div>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${statusBadge(m.status)}`}>
+                  <span className={`rounded-full px-2 py-0.5 type-micro font-semibold uppercase ${statusBadge(m.status)}`}>
                     {m.status}
                   </span>
                 </div>
 
                 {m.skill_level && (
-                  <div className="mt-3 inline-block rounded-full bg-secondary px-2 py-0.5 text-[11px]">
+                  <div className="mt-3 inline-block rounded-full bg-secondary px-2 py-0.5 type-micro">
                     Nível: {m.skill_level}
                   </div>
                 )}
@@ -237,7 +237,7 @@ function MatchAbertoPage() {
                 {m.participants && m.participants.length > 0 && (
                   <ul className="mt-2 flex flex-wrap gap-1.5">
                     {m.participants.map((p) => (
-                      <li key={p.user_id} className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2 py-1 text-[11px]">
+                      <li key={p.user_id} className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2 py-1 type-micro">
                         <span>{p.full_name ?? "Aluno"}</span>
                         <PlayerStatsLine userId={p.user_id} compact />
                       </li>
@@ -252,7 +252,7 @@ function MatchAbertoPage() {
                   {mine && m.status !== "cancelado" && (
                     <button
                       onClick={() => cancel(m)}
-                      className="btn-bounce inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1.5 text-xs hover:bg-secondary"
+                      className="btn-bounce inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs hover:bg-accent"
                     >
                       <X className="h-3.5 w-3.5" /> Cancelar vaga
                     </button>
@@ -268,7 +268,7 @@ function MatchAbertoPage() {
                   {!mine && iAmIn && m.status !== "cancelado" && (
                     <button
                       onClick={() => leave(m)}
-                      className="btn-bounce inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1.5 text-xs hover:bg-secondary"
+                      className="btn-bounce inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs hover:bg-accent"
                     >
                       <LogOut className="h-3.5 w-3.5" /> Sair
                     </button>
@@ -301,10 +301,10 @@ function MatchAbertoPage() {
           <form
             onClick={(e) => e.stopPropagation()}
             onSubmit={create}
-            className="w-full max-w-md space-y-3 rounded-3xl border border-border bg-card p-6 shadow-glow"
+            className="plane w-full max-w-md space-y-3"
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold">Abrir vaga pra jogar</h2>
+              <h2 className="type-h3">Abrir vaga pra jogar</h2>
               <button type="button" onClick={() => setCreating(false)} className="btn-bounce rounded-full p-1 hover:bg-secondary">
                 <X className="h-4 w-4" />
               </button>
@@ -381,7 +381,7 @@ function MatchAbertoPage() {
                 className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm"
               />
             </div>
-            <button type="submit" className="btn-bounce w-full rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-glow">
+            <button type="submit" className="btn-bounce w-full rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
               Enviar vaga
             </button>
           </form>

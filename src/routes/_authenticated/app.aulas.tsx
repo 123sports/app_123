@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
-import { GraduationCap, FileSignature, Loader2 } from "lucide-react";
+import { FileSignature, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { createClassContract } from "@/lib/contracts.functions";
@@ -26,6 +26,7 @@ import {
   type ContractSnapshot,
 } from "@/lib/contracts";
 import { ContractView } from "@/components/ContractView";
+import { PageHeader } from "@/components/PageHeader";
 
 export const Route = createFileRoute("/_authenticated/app/aulas")({
   component: MinhasAulas,
@@ -129,13 +130,13 @@ function MinhasAulas() {
   }, [profile]);
 
   return (
-    <div className="space-y-8 animate-float-in">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <GraduationCap className="h-7 w-7 text-primary" /> Minhas Aulas
-        </h1>
-        <p className="text-muted-foreground">Contrate seu pacote semanal e acompanhe seus contratos.</p>
-      </header>
+    <div className="stack-app animate-float-in">
+      <PageHeader
+        eyebrow="Minhas aulas"
+        title="Minhas Aulas"
+        subtitle="Contrate seu pacote semanal e acompanhe seus contratos."
+      />
+
 
       {profileMissing.length > 0 && (
         <Card className="border-yellow-500/40 bg-yellow-500/10">
@@ -158,14 +159,14 @@ function MinhasAulas() {
       {/* Existing contracts */}
       {contracts.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Seus contratos</h2>
-          <div className="grid gap-3 md:grid-cols-2">
+          <h2 className="type-h2">Seus contratos</h2>
+          <div className="grid gap-4 auto-rows-fr md:grid-cols-2">
             {contracts.map((c) => {
               const plan = plans.find((p) => p.id === c.plan_id);
               const s = statusLabel(c.status);
               const needsSign = c.status === "aguardando_aluno" || c.status === "rascunho" || c.status === "proposta_admin";
               return (
-                <Card key={c.id}>
+                <Card key={c.id} className="h-full">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -179,9 +180,9 @@ function MinhasAulas() {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="text-sm">
-                      Valor combinado: <strong>{brl(c.agreed_price_cents)}</strong>
+                      Valor combinado: <strong className="type-data">{brl(c.agreed_price_cents)}</strong>
                       {c.agreed_price_cents !== c.list_price_cents && (
-                        <span className="ml-2 text-muted-foreground line-through">{brl(c.list_price_cents)}</span>
+                        <span className="type-data ml-2 text-muted-foreground line-through">{brl(c.list_price_cents)}</span>
                       )}
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -202,7 +203,7 @@ function MinhasAulas() {
 
       {/* Catalog */}
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold">Catálogo de pacotes</h2>
+        <h2 className="type-h2">Catálogo de pacotes</h2>
         {loading ? (
           <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
         ) : byDuration.length === 0 ? (
@@ -210,18 +211,18 @@ function MinhasAulas() {
         ) : (
           byDuration.map(([months, list]) => (
             <div key={months} className="space-y-2">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <h3 className="type-eyebrow text-muted-foreground">
                 {months === 1 ? "Mensal" : months === 3 ? "Trimestral" : months === 6 ? "Semestral" : `${months} meses`}
               </h3>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 auto-rows-fr sm:grid-cols-2 lg:grid-cols-4">
                 {list.map((p) => (
-                  <Card key={p.id} className="flex flex-col">
+                  <Card key={p.id} className="flex h-full flex-col">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base">{p.frequency_per_week}x por semana</CardTitle>
                       <CardDescription>{p.description ?? `${p.modality} · ${p.class_duration_min} min`}</CardDescription>
                     </CardHeader>
                     <CardContent className="mt-auto space-y-3">
-                      <div className="text-2xl font-bold">{brl(p.price_cents)}</div>
+                      <div className="type-data text-2xl font-bold">{brl(p.price_cents)}</div>
                       <Button
                         className="w-full"
                         disabled={!template}
@@ -337,7 +338,7 @@ function ContractDialog({ plan, template, profile, email, coach, settings, userI
       }
       onClose(true);
     } catch (e: any) {
-      toast.error(e.message ?? "Não foi possível criar o contrato.");
+      toast.error(e?.message ?? "Não foi possível criar o contrato. Tente de novo.");
     } finally {
       setSubmitting(false);
     }
@@ -392,7 +393,7 @@ function ContractDialog({ plan, template, profile, email, coach, settings, userI
             </div>
           </div>
 
-          <div className="rounded-lg border border-border bg-card p-4 max-h-96 overflow-y-auto">
+          <div className="plane max-h-96 overflow-y-auto">
             <ContractView markdown={preview} />
           </div>
         </div>
@@ -453,7 +454,7 @@ function ViewSignDialog({ contract, template, plan, onClose }: {
       toast.success("Aceite registrado!");
       onClose(true);
     } catch (e: any) {
-      toast.error(e.message ?? "Não foi possível assinar.");
+      toast.error(e?.message ?? "Não foi possível assinar. Tente de novo.");
     } finally {
       setSubmitting(false);
     }
@@ -467,7 +468,7 @@ function ViewSignDialog({ contract, template, plan, onClose }: {
           <DialogDescription>Leia com atenção antes de aceitar.</DialogDescription>
         </DialogHeader>
 
-        <div className="rounded-lg border border-border bg-card p-4 max-h-[60vh] overflow-y-auto">
+        <div className="plane max-h-[60vh] overflow-y-auto">
           <ContractView markdown={body} />
         </div>
 

@@ -135,12 +135,12 @@ function AuthPage() {
           <img
             src={logoFullColor}
             alt="On Tennis"
-            className="h-32 w-auto object-contain drop-shadow-2xl sm:h-40"
+            className="h-20 w-auto object-contain sm:h-24"
           />
         </Link>
-        <div className="rounded-3xl border border-border bg-card p-8 shadow-soft">
+        <div className="plane plane-hero">
           <div className="mb-4 flex items-center justify-between">
-            <h1 className="text-2xl font-bold">{mode === "signin" ? "Bem-vindo de volta" : "Crie sua conta"}</h1>
+            <h1 className="type-h2">{mode === "signin" ? "Bem-vindo de volta" : "Crie sua conta"}</h1>
             <div className="-mt-4"><BouncingBall size={32} /></div>
           </div>
 
@@ -151,9 +151,9 @@ function AuthPage() {
                   key={opt}
                   type="button"
                   onClick={() => { playPop(); setAudience(opt); }}
-                  className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
+                  className={`rounded-full px-3 py-2 text-xs font-bold transition ${
                     audience === opt
-                      ? "bg-primary text-primary-foreground shadow-glow"
+                      ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -204,7 +204,7 @@ function AuthPage() {
             <button
               type="submit"
               disabled={loading}
-              className="btn-bounce mt-2 w-full rounded-full bg-primary py-3 font-semibold text-primary-foreground shadow-glow disabled:opacity-60"
+              className="btn-bounce mt-2 min-h-11 w-full rounded-full bg-primary py-3 font-bold text-primary-foreground disabled:opacity-40"
             >
               {loading ? "..." : mode === "signin" ? "Entrar" : "Criar conta"}
             </button>
@@ -225,12 +225,12 @@ function AuthPage() {
   );
 }
 
-const inputCls = "w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/30";
+const inputCls = "w-full border border-input bg-background px-4 py-2.5 text-sm font-medium outline-none focus:border-foreground";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="mb-1 block type-eyebrow">{label}</span>
       {children}
     </label>
   );

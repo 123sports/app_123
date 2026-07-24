@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ContractView } from "@/components/ContractView";
+import { PageHeader } from "@/components/PageHeader";
 import { renderTemplate, buildSettingsSnapshot, EMPTY_COACH } from "@/lib/contracts";
 
 export const Route = createFileRoute("/_authenticated/admin/aulas-template")({
@@ -61,17 +62,16 @@ function AdminTemplate() {
       if (error) throw error;
       toast.success(`Nova versão v${nextVersion} criada.`);
       load();
-    } catch (e: any) { toast.error(e.message); } finally { setSaving(false); }
+    } catch (e: any) { toast.error(e?.message ?? "Não foi possível salvar a nova versão. Tente de novo."); } finally { setSaving(false); }
   };
 
   return (
-    <div className="space-y-6 animate-float-in">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Termo Padrão</h1>
-        <p className="text-muted-foreground">
-          Edite o modelo de contrato. Cada alteração cria uma nova versão; contratos já assinados ficam congelados na versão original.
-        </p>
-      </div>
+    <div className="space-y-4 animate-float-in">
+      <PageHeader
+        eyebrow="Admin · Contratos"
+        title="Termo Padrão"
+        subtitle="Edite o modelo de contrato. Cada alteração cria uma nova versão; contratos já assinados ficam congelados na versão original."
+      />
 
       <Card>
         <CardHeader className="pb-3">
@@ -134,7 +134,7 @@ function AdminTemplate() {
           <ul className="space-y-1 text-sm">
             {templates.map((t) => (
               <li key={t.id} className="flex items-center gap-2">
-                <span className={`rounded px-2 py-0.5 text-xs ${t.active ? "bg-green-500/20 text-green-700 dark:text-green-300" : "bg-muted text-muted-foreground"}`}>
+                <span className={`rounded-full px-2 py-0.5 type-micro ${t.active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
                   v{t.version} {t.active ? "· ativa" : ""}
                 </span>
                 <span>{t.title}</span>
