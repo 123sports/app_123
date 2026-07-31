@@ -3,8 +3,8 @@ services:
     name: app-123
     runtime: node
     plan: free
-    buildCommand: npm ci && npm run build
-    startCommand: npm start
+    buildCommand: cd frontend && npm ci && npm run build
+    startCommand: cd frontend && npm start
     envVars:
       - key: NODE_VERSION
         value: 22
@@ -12,11 +12,11 @@ services:
         sync: false
       - key: SUPABASE_PUBLISHABLE_KEY
         sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
+      - key: SUPABASE_SECRET_KEY
         sync: false
       - key: VITE_SUPABASE_URL
         sync: false
       - key: VITE_SUPABASE_PUBLISHABLE_KEY
         sync: false
-      - key: VITE_SUPABASE_PROJECT_ID
-        sync: false
+      - key: VITE_ENABLE_LOCAL_MODE
+        value: "false"
