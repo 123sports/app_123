@@ -14,9 +14,15 @@
     "build:dev": "npm --prefix frontend run build:dev",
     "preview": "npm run preview:local",
     "preview:local": "npm --prefix frontend run preview:local",
+    "preview:supabase": "npm --prefix frontend run preview:supabase",
     "start": "npm --prefix frontend run start",
     "lint": "npm --prefix frontend run lint",
     "format": "npm --prefix frontend run format",
-    "install:frontend": "npm --prefix frontend ci"
+    "install:frontend": "npm --prefix frontend ci",
+    "supabase:link": "npx supabase --workdir backend link",
+    "supabase:dry-run": "npx supabase --workdir backend db push --linked --dry-run",
+    "supabase:lint": "npx supabase --workdir backend db lint --linked --level error --fail-on error",
+    "supabase:push": "npx supabase --workdir backend db push --linked",
+    "supabase:config:push": "cd backend && npx supabase config push"
   }
 }

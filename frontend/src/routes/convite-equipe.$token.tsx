@@ -8,7 +8,7 @@ import { BouncingBall } from "@/components/BouncingBall";
 import { Toaster } from "@/components/ui/sonner";
 import { PasswordInput } from "@/components/PasswordInput";
 
-export const Route = createFileRoute("/convite/$token")({
+export const Route = createFileRoute("/convite-equipe/$token")({
   component: ConvitePage,
 });
 
@@ -22,49 +22,50 @@ function ConvitePage() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from("staff_invites")
-        .select("*")
-        .eq("token", token)
-        .maybeSingle();
-      setInvite(data);
+      const { data } = await (supabase as any)
+        .rpc("get_staff_invite_by_token", { _token: token });
+      setInvite(Array.isArray(data) ? data[0] ?? null : data);
       setLoading(false);
     })();
   }, [token]);
 
   const accept = async () => {
     if (!invite) return;
-    if (form.password.length < 6) return toast.error("Senha mínima de 6 caracteres");
+    if (form.password.length < 8) return toast.error("A senha precisa ter pelo menos 8 caracteres");
     if (!form.full_name.trim()) return toast.error("Informe seu nome");
     setBusy(true);
     try {
-      // Sign up. Master grant trigger / handle_new_user creates profile and 'aluno' role.
-      const { data: signed, error: signErr } = await supabase.auth.signUp({
+      const signIn = await supabase.auth.signInWithPassword({
+        email: invite.email,
+        password: form.password,
+      });
+
+      if (!signIn.error && signIn.data.user) {
+        const { error: acceptError } = await (supabase as any)
+          .rpc("accept_staff_invite", { _token: token });
+        if (acceptError) throw acceptError;
+        toast.success("Convite aceito. Acesso de equipe liberado.");
+        navigate({ to: "/admin" });
+        return;
+      }
+
+      const { data: signed, error: signUpError } = await supabase.auth.signUp({
         email: invite.email,
         password: form.password,
         options: { data: { full_name: form.full_name } },
       });
-      if (signErr) {
-        // Maybe already has an account — try sign in
-        const { error: inErr } = await supabase.auth.signInWithPassword({
-          email: invite.email, password: form.password,
-        });
-        if (inErr) throw inErr;
+      if (signUpError) throw signUpError;
+      if (!signed.user?.identities?.length) {
+        throw new Error("Este e-mail já possui conta. Confira a senha informada.");
       }
-      // Wait a moment for triggers
-      await new Promise((r) => setTimeout(r, 600));
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) throw new Error("Falha ao autenticar");
-      // Insert role (RLS won't allow self; rely on accept mutation via update)
-      // Use a workaround: mark invite accepted; admin will see; OR call via RPC.
-      // Since we can't insert role from client, we mark invite accepted and use service via trigger? Not present.
-      // Simpler: update profile name, mark invite accepted. Role insertion needs admin.
-      await supabase.from("profiles").update({ full_name: form.full_name }).eq("id", u.user.id);
-      await supabase.from("staff_invites").update({
-        status: "aceito", accepted_at: new Date().toISOString(),
-      }).eq("token", token);
-      toast.success(`Bem-vindo! Sua conta foi criada como ${invite.role}. Complete seu perfil.`);
-      navigate({ to: "/app/perfil" });
+
+      if (signed.session) {
+        toast.success("Conta de equipe criada.");
+        navigate({ to: "/admin" });
+      } else {
+        toast.success("Conta criada. Confirme o e-mail para entrar.");
+        navigate({ to: "/auth" });
+      }
     } catch (e: any) {
       toast.error(e.message ?? "Erro ao aceitar convite");
     } finally {
@@ -97,15 +98,18 @@ function ConvitePage() {
               <p className="mt-1 text-muted-foreground">E-mail: {invite.email}</p>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium">Seu nome completo</label>
+              <label htmlFor="staff-invite-name" className="mb-1 block text-xs font-medium">Seu nome completo</label>
               <input
+                id="staff-invite-name"
                 value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })}
                 className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium">Crie uma senha</label>
+              <label htmlFor="staff-invite-password" className="mb-1 block text-xs font-medium">Crie uma senha</label>
               <PasswordInput
+                id="staff-invite-password"
+                minLength={8}
                 value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
                 className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
               />
@@ -117,7 +121,7 @@ function ConvitePage() {
               {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Aceitar e criar conta"}
             </button>
             <p className="text-center text-xs text-muted-foreground">
-              Após o cadastro, o administrador finaliza a atribuição do papel.
+              O acesso de equipe será liberado automaticamente após o cadastro.
             </p>
           </div>
         )}

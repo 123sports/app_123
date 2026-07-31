@@ -35,7 +35,19 @@ export default tseslint.config(
       ],
       "react-refresh/only-export-components": [
         "warn",
-        { allowConstantExport: true, allowExportNames: ["Route"] },
+        {
+          allowConstantExport: true,
+          allowExportNames: [
+            "Route",
+            "badgeVariants",
+            "buttonVariants",
+            "navigationMenuTriggerStyle",
+            "prefetchPlayerStats",
+            "toggleVariants",
+            "useFormField",
+            "useSidebar",
+          ],
+        },
       ],
       "@typescript-eslint/no-unused-vars": "off",
     },

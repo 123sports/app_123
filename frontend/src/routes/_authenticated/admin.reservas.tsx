@@ -40,6 +40,7 @@ const STATUSES: { key: Row["status"]; label: string; color: string }[] = [
 ];
 
 function AdminReservas() {
+  const { staffRole } = Route.useRouteContext();
   const [rows, setRows] = useState<Row[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [operators, setOperators] = useState<Operator[]>([]);
@@ -63,7 +64,7 @@ function AdminReservas() {
     setPricing(Object.fromEntries((pr ?? []).map((p: any) => [p.booking_type, p.price_cents])));
     const ids = [...new Set((bs ?? []).map((b: any) => b.user_id))];
     if (ids.length) {
-      const { data: pf } = await supabase.from("profiles").select("id, full_name").in("id", ids);
+      const { data: pf } = await (supabase as any).from("profiles_public").select("id, full_name").in("id", ids);
       setProfiles(Object.fromEntries((pf ?? []).map((p: any) => [p.id, p])));
     }
   };
@@ -87,6 +88,20 @@ function AdminReservas() {
     { key: "kanban", label: "Kanban", icon: Columns3 },
     { key: "agenda", label: "Agenda do dia", icon: Clock },
   ];
+
+  if (staffRole === "professor") {
+    return (
+      <ProfessorReservationsView
+        rows={filtered}
+        profiles={profiles}
+        paymentFilter={paymentFilter}
+        statusFilter={statusFilter}
+        setPaymentFilter={setPaymentFilter}
+        setStatusFilter={setStatusFilter}
+        update={update}
+      />
+    );
+  }
 
   return (
     <div className="stack-app">
@@ -139,6 +154,103 @@ function AdminReservas() {
           update={update}
         />
       )}
+    </div>
+  );
+}
+
+function ProfessorReservationsView({
+  rows,
+  profiles,
+  paymentFilter,
+  statusFilter,
+  setPaymentFilter,
+  setStatusFilter,
+  update,
+}: {
+  rows: Row[];
+  profiles: Record<string, Profile>;
+  paymentFilter: string;
+  statusFilter: string;
+  setPaymentFilter: (value: string) => void;
+  setStatusFilter: (value: string) => void;
+  update: (id: string, patch: Record<string, any>) => void;
+}) {
+  return (
+    <div className="stack-app">
+      <PageHeader
+        eyebrow="Professor · Reservas"
+        title="Minha agenda"
+        subtitle="Acompanhe suas aulas, registre presença e conclua atendimentos."
+        actions={(
+          <>
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)} className="rounded-full border border-input bg-background px-2 py-1.5 text-sm">
+              <option value="all">Todos pagamentos</option>
+              <option value="pendente">Pendente</option>
+              <option value="pago">Confirmado</option>
+            </select>
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-full border border-input bg-background px-2 py-1.5 text-sm">
+              <option value="all">Todos status</option>
+              <option value="confirmada">Confirmada</option>
+              <option value="concluida">Concluída</option>
+              <option value="cancelada">Cancelada</option>
+            </select>
+          </>
+        )}
+      />
+
+      <div className="plane p-0">
+        {rows.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">Nenhuma reserva encontrada.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {rows.map((booking) => (
+              <li key={booking.id} className="flex flex-wrap items-center gap-4 p-4">
+                <div className="min-w-28">
+                  <div className="type-data font-semibold">
+                    {format(new Date(`${booking.booking_date}T00:00:00`), "dd/MM/yyyy")}
+                  </div>
+                  <div className="type-small text-muted-foreground">
+                    {String(booking.start_hour).padStart(2, "0")}:00
+                  </div>
+                </div>
+                <div className="min-w-48 flex-1">
+                  <Link to="/admin/aluno/$id" params={{ id: booking.user_id }} className="font-semibold hover:underline">
+                    {profiles[booking.user_id]?.full_name ?? "Aluno"}
+                  </Link>
+                  <div className="type-small text-muted-foreground">
+                    {booking.type.replace("_", " ")} · {booking.payment_status === "pago" ? "pagamento confirmado" : "pagamento pendente"}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => update(booking.id, { attended: true })}
+                    className={`rounded-full border p-2 ${booking.attended === true ? "border-primary bg-primary/15" : "border-border"}`}
+                    title="Marcar presença"
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => update(booking.id, { attended: false })}
+                    className={`rounded-full border p-2 ${booking.attended === false ? "border-destructive bg-destructive/10" : "border-border"}`}
+                    title="Marcar falta"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  {booking.status === "confirmada" && (
+                    <button
+                      onClick={() => update(booking.id, { status: "concluida" })}
+                      className="rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
+                    >
+                      Concluir
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

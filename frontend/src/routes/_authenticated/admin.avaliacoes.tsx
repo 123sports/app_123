@@ -39,6 +39,7 @@ type Evaluation = {
 const defaultScores = () => Object.fromEntries(SKILLS.map((s) => [s.key, 5])) as Record<string, number>;
 
 function AdminEvaluations() {
+  const { staffRole } = Route.useRouteContext();
   const [students, setStudents] = useState<Student[]>([]);
   const [evals, setEvals] = useState<Evaluation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +53,7 @@ function AdminEvaluations() {
 
   const load = async () => {
     const [{ data: profiles }, { data: e }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name").order("full_name"),
+      (supabase as any).rpc("list_students_for_staff"),
       (supabase as any)
         .from("student_evaluations")
         .select("id, student_id, professor_id, evaluation_date, overall_score, highlights, improvements, score_forehand, score_backhand, score_serve, score_volley, score_mental, score_fitness")
@@ -164,7 +165,7 @@ function AdminEvaluations() {
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Admin · Avaliações"
+        eyebrow={`${staffRole === "admin" ? "Admin" : "Professor"} · Avaliações`}
         title="Avaliações"
         subtitle="Registre a evolução do aluno após cada aula. Notas geram nível e certificados automaticamente."
       />
@@ -322,14 +323,16 @@ function AdminEvaluations() {
                     >
                       <Pencil className="h-4 w-4" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => removeEval(e)}
-                      title="Excluir"
-                      className="rounded-full p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {staffRole === "admin" && (
+                      <button
+                        type="button"
+                        onClick={() => removeEval(e)}
+                        title="Excluir"
+                        className="rounded-full p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}

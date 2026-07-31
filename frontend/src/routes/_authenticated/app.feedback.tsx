@@ -21,11 +21,8 @@ function AppFeedback() {
     (async () => {
       const { data: u } = await supabase.auth.getUser();
       setUserId(u.user?.id ?? null);
-      const { data: profIds } = await supabase.from("user_roles").select("user_id").eq("role", "professor");
-      const ids = (profIds ?? []).map((r: any) => r.user_id);
-      if (!ids.length) return;
-      const { data: pf } = await (supabase as any).from("profiles_public").select("id, full_name, avatar_url").in("id", ids);
-      const list = (pf ?? []) as Prof[];
+      const { data } = await (supabase as any).rpc("list_active_professors");
+      const list = (data ?? []) as Prof[];
       setProfessors(list);
       const entries = await Promise.all(
         list.map(async (p) => {

@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import {
   approveLocalPixCheckout,
   expireLocalPixCheckout,
+  getPixCheckout,
+  isLocalPaymentMode,
   type PixCheckout,
 } from "@/lib/payments";
 import { brl } from "@/lib/money";
@@ -28,6 +30,7 @@ function remainingSeconds(expiresAt: string) {
 }
 
 export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }: Props) {
+  const isLocal = isLocalPaymentMode();
   const [checkout, setCheckout] = useState(initialCheckout);
   const [remaining, setRemaining] = useState(() => remainingSeconds(initialCheckout.expiresAt));
   const [approving, setApproving] = useState(false);
@@ -49,6 +52,24 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
     }, 1000);
     return () => window.clearInterval(timer);
   }, [checkout]);
+
+  useEffect(() => {
+    if (isLocal || checkout.status !== "pending") return;
+    const poll = window.setInterval(async () => {
+      try {
+        const current = await getPixCheckout(checkout.orderId);
+        setCheckout(current);
+        if (current.status === "paid") {
+          window.clearInterval(poll);
+          toast.success("Pagamento confirmado e reserva liberada");
+          onPaid(current);
+        }
+      } catch {
+        // Webhook is authoritative; a transient status read is retried.
+      }
+    }, 5_000);
+    return () => window.clearInterval(poll);
+  }, [checkout.orderId, checkout.status, isLocal, onPaid]);
 
   const countdown = useMemo(() => {
     const minutes = Math.floor(remaining / 60);
@@ -110,7 +131,7 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
               <div className="h-[220px] w-[220px] overflow-hidden border border-border bg-white p-2">
                 <img
                   src={checkout.qrCodeDataUrl}
-                  alt="QR Code Pix local"
+                  alt="QR Code para pagamento via Pix"
                   className="h-full w-full object-contain"
                 />
               </div>
@@ -132,7 +153,8 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
 
             <div className="flex items-center justify-between text-sm">
               <span className="inline-flex items-center gap-2 text-muted-foreground">
-                <ShieldCheck className="h-4 w-4" /> Ambiente local
+                <ShieldCheck className="h-4 w-4" />
+                {isLocal ? "Ambiente local" : "Pagamento seguro via Mercado Pago"}
               </span>
               <span className={`inline-flex items-center gap-1 type-data ${expired ? "text-destructive" : ""}`}>
                 <Clock3 className="h-4 w-4" /> {expired ? "Expirado" : countdown}
@@ -149,10 +171,12 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
           ) : (
             <>
               <Button variant="outline" onClick={onClose}>Fechar</Button>
-              <Button onClick={approve} disabled={approving || expired}>
-                {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                Simular pagamento aprovado
-              </Button>
+              {isLocal && (
+                <Button onClick={approve} disabled={approving || expired}>
+                  {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  Simular pagamento aprovado
+                </Button>
+              )}
             </>
           )}
         </DialogFooter>

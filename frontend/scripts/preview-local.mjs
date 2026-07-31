@@ -1,9 +1,15 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+
+if (existsSync(".env.local")) {
+  process.loadEnvFile(".env.local");
+}
 
 const host = process.env.HOST || "127.0.0.1";
 const port = process.env.PORT || "4173";
 const npmCommand = "npm";
 const useShell = process.platform === "win32";
+const useSupabase = process.argv.includes("--supabase");
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -29,12 +35,12 @@ await run(npmCommand, ["run", "build"], {
   shell: useShell,
   env: {
     ...process.env,
-    VITE_ENABLE_LOCAL_MODE: "true",
+    VITE_ENABLE_LOCAL_MODE: useSupabase ? "false" : "true",
   },
 });
 
 console.log("");
-console.log(`Local preview: http://${host}:${port}/`);
+console.log(`${useSupabase ? "Supabase" : "Mock"} preview: http://${host}:${port}/`);
 console.log("Press Ctrl+C to stop.");
 console.log("");
 

@@ -158,7 +158,9 @@ function AdminMatchAberto() {
                   {m.notes && <p className="max-w-xl text-sm text-muted-foreground">{m.notes}</p>}
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Users className="h-3.5 w-3.5" />
-                    <span className="type-data">{(m.participants?.length ?? 0)}/{m.max_players}</span>
+                  <span className="type-data">
+                    {1 + (m.participants?.filter((p: any) => p.user_id !== m.creator_id).length ?? 0)}/{m.max_players}
+                  </span>
                   </div>
                   {m.participants && m.participants.length > 0 && (
                     <ul className="flex flex-wrap gap-1.5">
@@ -198,7 +200,9 @@ function AdminMatchAberto() {
                   </div>
                 </div>
               </div>
-              {m.status !== "cancelado" && (m.participants?.length ?? 0) >= 4 && (
+              {m.status !== "cancelado"
+                && 1 + (m.participants?.filter((p: any) => p.user_id !== m.creator_id).length ?? 0) >= 4
+                && (
                 <MatchDrawCard
                   sourceType="open_match"
                   sourceId={m.id}
@@ -209,7 +213,7 @@ function AdminMatchAberto() {
                   canDraw={true}
                   startsAt={new Date(`${m.match_date}T${String(m.start_hour).padStart(2, "0")}:00:00-03:00`)}
                 />
-              )}
+                )}
             </div>
           ))}
         </div>

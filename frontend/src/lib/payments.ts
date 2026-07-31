@@ -1,7 +1,16 @@
 import QRCode from "qrcode";
 import { isLocalSupabaseMode, supabase } from "@/integrations/supabase/client";
+import {
+  approveLocalPixCheckoutServer,
+  cancelBookingPixCheckoutServer,
+  createBookingPixCheckoutServer,
+} from "@/lib/payments.functions";
 
 export const LOCAL_PIX_HOLD_MINUTES = 30;
+
+export function isLocalPaymentMode() {
+  return isLocalSupabaseMode() || import.meta.env.VITE_PAYMENT_PROVIDER === "local";
+}
 
 export const BOOKING_TYPE_LABELS: Record<string, string> = {
   quadra_livre: "Quadra livre",
@@ -61,7 +70,7 @@ async function getBookingPrice(bookingType: string) {
 
 export async function createBookingPixCheckout(input: CreateBookingPixInput): Promise<PixCheckout> {
   if (!isLocalSupabaseMode()) {
-    throw new Error("O gateway Pix real ainda não foi conectado ao ambiente Supabase.");
+    return createBookingPixCheckoutServer({ data: input });
   }
 
   const { data: auth } = await supabase.auth.getUser();
@@ -243,7 +252,11 @@ export async function getPixCheckout(orderId: string): Promise<PixCheckout> {
     bookingIds: order.metadata?.booking_ids ?? [],
     amountCents: order.amount_cents,
     pixCopyPaste: payment.qr_code ?? "",
-    qrCodeDataUrl: payment.qr_code_base64 ?? "",
+    qrCodeDataUrl: payment.qr_code_base64
+      ? payment.qr_code_base64.startsWith("data:")
+        ? payment.qr_code_base64
+        : `data:image/png;base64,${payment.qr_code_base64}`
+      : "",
     expiresAt: order.expires_at,
     status,
     description: order.description,
@@ -286,7 +299,8 @@ export async function cleanupExpiredLocalPixCheckouts() {
 
 export async function cancelLocalPixCheckout(orderId: string) {
   if (!isLocalSupabaseMode()) {
-    throw new Error("O cancelamento do Pix deve ser processado pelo servidor.");
+    await cancelBookingPixCheckoutServer({ data: { orderId } });
+    return;
   }
   const checkout = await getPixCheckout(orderId);
   const order = await readLocalOrder(orderId);
@@ -310,8 +324,12 @@ export async function cancelLocalPixCheckout(orderId: string) {
 }
 
 export async function approveLocalPixCheckout(checkout: PixCheckout): Promise<PixCheckout> {
-  if (!isLocalSupabaseMode()) {
+  if (!isLocalPaymentMode()) {
     throw new Error("A aprovação manual só existe no ambiente local.");
+  }
+  if (!isLocalSupabaseMode()) {
+    await approveLocalPixCheckoutServer({ data: { orderId: checkout.orderId } });
+    return { ...checkout, status: "paid" };
   }
 
   const order = await readLocalOrder(checkout.orderId);

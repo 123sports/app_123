@@ -7,6 +7,7 @@ Conteudo principal:
 - `supabase/config.toml`: configuracao local do Supabase.
 - `supabase/migrations/`: historico de migracoes SQL.
 - `scripts/configure-supabase-local.ps1`: configuracao segura das credenciais locais.
+- `scripts/bootstrap-admin.ps1`: criacao unica da primeira conta administradora.
 
 Observacao: server functions e middlewares do TanStack Start ainda ficam em `frontend/src`, porque sao compilados junto com o runtime SSR da aplicacao.
 
@@ -39,12 +40,35 @@ nao e armazenada nesse arquivo.
 ## Aplicacao das migrations
 
 ```powershell
-cd backend
 npx supabase login
-npx supabase link --project-ref SEU_PROJECT_REFERENCE
-npx supabase db push --dry-run
-npx supabase db push
+npm run supabase:link
+npm run supabase:dry-run
+npm run supabase:lint
+npm run supabase:push
+npm run supabase:config:push
 ```
 
-Execute primeiro o `--dry-run` e revise o resultado. Nunca use
-`supabase db reset --linked` em um projeto remoto.
+Execute primeiro o dry run e revise o resultado. `supabase:push` nao inclui
+`supabase/seeds/demo.sql`. Nunca use `supabase db reset --linked` em um projeto
+remoto.
+
+## Mercado Pago
+
+O checkout Pix usa o endpoint de pagamentos no backend. Configure somente no
+servidor:
+
+```text
+MERCADO_PAGO_ACCESS_TOKEN
+MERCADO_PAGO_WEBHOOK_SECRET
+PAYMENT_PROVIDER=mercado_pago
+ALLOW_LOCAL_PAYMENT_SIMULATION=false
+APP_BASE_URL=https://app-123-fx8f.onrender.com
+```
+
+No painel Mercado Pago, cadastre a notificacao de pagamentos em:
+
+```text
+https://app-123-fx8f.onrender.com/api/webhooks/mercadopago
+```
+
+O Access Token e a assinatura do webhook nunca podem usar o prefixo `VITE_`.

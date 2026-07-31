@@ -1,4 +1,5 @@
--- Seed demo data: 20 professors, 120 students, ~200 bookings
+-- Optional local demo data: 20 professors, 120 students, ~200 bookings.
+-- Never apply this file to staging or production.
 DO $$
 DECLARE
   v_first_names text[] := ARRAY['Bruno','Rafael','Lucas','Gabriel','Pedro','Thiago','Diego','Felipe','Andre','Ricardo','Marcelo','Rodrigo','Guilherme','Vinicius','Matheus','Eduardo','Fernando','Gustavo','Henrique','Igor','Joao','Leonardo','Marcos','Nicolas','Otavio','Paulo','Renato','Samuel','Tiago','Vitor','Ana','Mariana','Juliana','Fernanda','Camila','Beatriz','Larissa','Amanda','Carolina','Patricia','Rafaela','Bianca','Isabela','Luiza','Natalia','Renata','Sofia','Tatiana','Vanessa','Yasmin','Bruna','Clara','Debora','Elisa','Gabriela','Helena','Isadora','Julia','Laura','Manuela'];

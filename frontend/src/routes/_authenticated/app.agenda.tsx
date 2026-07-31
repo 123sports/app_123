@@ -77,19 +77,12 @@ function Agenda() {
       const { data: u } = await supabase.auth.getUser();
       setUserId(u.user?.id ?? null);
 
-      const [{ data: profIds }, { data: priceRows }] = await Promise.all([
-        supabase.from("user_roles").select("user_id").eq("role", "professor"),
+      const [{ data: professorRows }, { data: priceRows }] = await Promise.all([
+        (supabase as any).rpc("list_active_professors"),
         supabase.from("pricing").select("booking_type, price_cents").eq("active", true),
       ]);
       setPricing(Object.fromEntries((priceRows ?? []).map((row) => [row.booking_type, row.price_cents])));
-      if (profIds && profIds.length) {
-        const ids = profIds.map((r) => r.user_id);
-        const { data: profs } = await (supabase as any)
-          .from("profiles_public")
-          .select("id, full_name")
-          .in("id", ids);
-        setProfessors(profs ?? []);
-      }
+      setProfessors(professorRows ?? []);
     })();
   }, []);
 

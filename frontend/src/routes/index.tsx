@@ -410,7 +410,7 @@ function Features() {
   const items = [
     { n: "01", t: "Reserve em segundos", d: "Escolha o horário que cabe na sua rotina, direto do celular." },
     { n: "02", t: "Jogue do seu jeito", d: "Aula individual, dupla, trio ou quarteto — você decide com quem treinar." },
-    { n: "03", t: "Pague como preferir", d: "PIX, crédito, débito ou mensalidade. Sua reserva já sai garantida." },
+    { n: "03", t: "Pague com Pix", d: "A reserva é confirmada automaticamente depois da aprovação do pagamento." },
     { n: "04", t: "Fale com o professor", d: "Tire dúvidas, peça dicas e combine detalhes sem sair do app." },
     { n: "05", t: "Evolua jogando", d: "Avaliações, níveis e certificados para acompanhar seu progresso." },
     { n: "06", t: "Sem dor de cabeça", d: "Lembretes automáticos, confirmação rápida e cancelamento flexível." },

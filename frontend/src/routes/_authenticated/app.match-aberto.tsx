@@ -204,7 +204,8 @@ function MatchAbertoPage() {
           {visible.map((m) => {
             const iAmIn = m.participants?.some((p) => p.user_id === me);
             const mine = m.creator_id === me;
-            const full = (m.participants?.length ?? 0) >= m.max_players;
+            const confirmedCount = 1 + (m.participants?.filter((p) => p.user_id !== m.creator_id).length ?? 0);
+            const full = confirmedCount >= m.max_players;
             return (
               <div key={m.id} className="plane h-full">
                 <div className="flex items-start justify-between gap-2">
@@ -232,7 +233,7 @@ function MatchAbertoPage() {
 
                 <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
                   <Users className="h-4 w-4" />
-                  {(m.participants?.length ?? 0)}/{m.max_players} confirmados
+                  {confirmedCount}/{m.max_players} confirmados
                 </div>
                 {m.participants && m.participants.length > 0 && (
                   <ul className="mt-2 flex flex-wrap gap-1.5">
@@ -278,7 +279,7 @@ function MatchAbertoPage() {
                   )}
                 </div>
 
-                {(iAmIn || mine) && m.status !== "cancelado" && (m.participants?.length ?? 0) >= 4 && (
+                {(iAmIn || mine) && m.status !== "cancelado" && confirmedCount >= 4 && (
                   <MatchDrawCard
                     sourceType="open_match"
                     sourceId={m.id}

@@ -3,8 +3,8 @@ services:
     name: app-123
     runtime: node
     plan: free
-    buildCommand: cd frontend && npm ci && npm run build
-    startCommand: cd frontend && npm start
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
     envVars:
       - key: NODE_VERSION
         value: 22
@@ -20,3 +20,17 @@ services:
         sync: false
       - key: VITE_ENABLE_LOCAL_MODE
         value: "false"
+      - key: VITE_ENABLE_GOOGLE_AUTH
+        value: "false"
+      - key: VITE_PAYMENT_PROVIDER
+        value: mercado_pago
+      - key: APP_BASE_URL
+        value: https://app-123-fx8f.onrender.com
+      - key: PAYMENT_PROVIDER
+        value: mercado_pago
+      - key: ALLOW_LOCAL_PAYMENT_SIMULATION
+        value: "false"
+      - key: MERCADO_PAGO_ACCESS_TOKEN
+        sync: false
+      - key: MERCADO_PAGO_WEBHOOK_SECRET
+        sync: false

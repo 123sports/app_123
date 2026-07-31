@@ -26,31 +26,8 @@ function AdminAlunos() {
 
   useEffect(() => {
     (async () => {
-      const { data: alunos } = await supabase
-        .from("user_roles")
-        .select("user_id")
-        .eq("role", "aluno");
-      const ids = (alunos ?? []).map((r) => r.user_id);
-      if (!ids.length) return setList([]);
-      const [{ data: profs }, { data: bs }] = await Promise.all([
-        supabase.from("profiles").select("id, full_name, phone, birth_date, skill_level").in("id", ids),
-        supabase.from("bookings").select("user_id, attended, status").in("user_id", ids),
-      ]);
-      const byUser: Record<string, { b: number; a: number; m: number }> = {};
-      (bs ?? []).forEach((b: any) => {
-        const e = (byUser[b.user_id] ||= { b: 0, a: 0, m: 0 });
-        e.b++;
-        if (b.attended === true) e.a++;
-        if (b.attended === false) e.m++;
-      });
-      setList(
-        (profs ?? []).map((p: any) => ({
-          ...p,
-          bookings: byUser[p.id]?.b ?? 0,
-          attended: byUser[p.id]?.a ?? 0,
-          missed: byUser[p.id]?.m ?? 0,
-        })),
-      );
+      const { data } = await (supabase as any).rpc("list_students_for_staff");
+      setList((data ?? []) as Aluno[]);
     })();
   }, []);
 

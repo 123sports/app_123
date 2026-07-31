@@ -26,6 +26,7 @@ type Feedback = {
 };
 
 function AdminFeedbacks() {
+  const { staffRole } = Route.useRouteContext();
   const [rows, setRows] = useState<Feedback[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<"all" | "pending" | "featured">("all");
@@ -42,7 +43,7 @@ function AdminFeedbacks() {
       if (r.student_id) ids.add(r.student_id);
     });
     if (ids.size) {
-      const { data: pf } = await supabase.from("profiles").select("id, full_name").in("id", [...ids]);
+      const { data: pf } = await (supabase as any).from("profiles_public").select("id, full_name").in("id", [...ids]);
       setNames(Object.fromEntries((pf ?? []).map((p: any) => [p.id, p.full_name ?? "—"])));
     }
   };
@@ -66,7 +67,9 @@ function AdminFeedbacks() {
   };
 
   const filtered = rows.filter((r) => {
-    if (filter === "pending") return !r.approved_admin;
+    if (filter === "pending") {
+      return staffRole === "admin" ? !r.approved_admin : !r.approved_professor;
+    }
     if (filter === "featured") return r.featured;
     return true;
   });
@@ -74,9 +77,11 @@ function AdminFeedbacks() {
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Admin · Feedbacks"
+        eyebrow={`${staffRole === "admin" ? "Admin" : "Professor"} · Feedbacks`}
         title="Feedbacks dos alunos"
-        subtitle="Aprove e destaque depoimentos para divulgar na landing page."
+        subtitle={staffRole === "admin"
+          ? "Aprove e destaque depoimentos para divulgar na landing page."
+          : "Consulte e aprove os feedbacks recebidos dos seus alunos."}
         actions={
           <>
             {(["all", "pending", "featured"] as const).map((f) => (
@@ -107,9 +112,11 @@ function AdminFeedbacks() {
                   <span className="type-data">{format(new Date(r.created_at), "dd/MM/yy HH:mm")}</span>
                 </div>
               </div>
-              <button onClick={() => remove(r.id)} className="btn-bounce rounded-full border border-border p-1.5 hover:bg-destructive/10">
-                <Trash2 className="h-3.5 w-3.5 text-destructive" />
-              </button>
+              {staffRole === "admin" && (
+                <button onClick={() => remove(r.id)} className="btn-bounce rounded-full border border-border p-1.5 hover:bg-destructive/10">
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </button>
+              )}
             </div>
             <div className="my-3 flex items-center gap-0.5">
               {[1, 2, 3, 4, 5].map((n) => (
@@ -125,21 +132,28 @@ function AdminFeedbacks() {
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <button
-                onClick={() => update(r.id, { approved_admin: !r.approved_admin })}
-                className={`btn-bounce inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 type-small font-semibold ${r.approved_admin ? "border-primary bg-primary text-primary-foreground" : "border-border hover:bg-accent"}`}
+                onClick={() => update(
+                  r.id,
+                  staffRole === "admin"
+                    ? { approved_admin: !r.approved_admin }
+                    : { approved_professor: !r.approved_professor },
+                )}
+                className={`btn-bounce inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 type-small font-semibold ${(staffRole === "admin" ? r.approved_admin : r.approved_professor) ? "border-primary bg-primary text-primary-foreground" : "border-border hover:bg-accent"}`}
               >
-                {r.approved_admin ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                {r.approved_admin ? "Aprovado" : "Aprovar"}
+                {(staffRole === "admin" ? r.approved_admin : r.approved_professor) ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                {(staffRole === "admin" ? r.approved_admin : r.approved_professor) ? "Aprovado" : "Aprovar"}
               </button>
-              <button
-                disabled={!r.public_consent || !r.approved_admin}
-                onClick={() => update(r.id, { featured: !r.featured })}
-                title={!r.public_consent ? "Aluno não autorizou divulgação" : !r.approved_admin ? "Aprove primeiro" : ""}
-                className={`btn-bounce inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 type-small font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${r.featured ? "border-primary bg-primary text-primary-foreground" : "border-border hover:bg-accent"}`}
-              >
-                <Sparkles className="h-3 w-3" />
-                {r.featured ? "Destacado na landing" : "Destacar na landing"}
-              </button>
+              {staffRole === "admin" && (
+                <button
+                  disabled={!r.public_consent || !r.approved_admin}
+                  onClick={() => update(r.id, { featured: !r.featured })}
+                  title={!r.public_consent ? "Aluno não autorizou divulgação" : !r.approved_admin ? "Aprove primeiro" : ""}
+                  className={`btn-bounce inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 type-small font-semibold disabled:cursor-not-allowed disabled:opacity-40 ${r.featured ? "border-primary bg-primary text-primary-foreground" : "border-border hover:bg-accent"}`}
+                >
+                  <Sparkles className="h-3 w-3" />
+                  {r.featured ? "Destacado na landing" : "Destacar na landing"}
+                </button>
+              )}
             </div>
           </div>
         ))}

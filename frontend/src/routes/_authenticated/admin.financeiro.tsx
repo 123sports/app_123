@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Activity, Wallet, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,7 +30,7 @@ const PAY_LABEL: Record<string, string> = { dinheiro: "Dinheiro", pix: "Pix", ca
 function AdminFinanceiro() {
   const { tab, ym } = Route.useSearch();
   const navigate = useNavigate({ from: "/admin/financeiro" });
-  const monthDate = parse(ym + "-01", "yyyy-MM-dd", new Date());
+  const monthDate = useMemo(() => parse(ym + "-01", "yyyy-MM-dd", new Date()), [ym]);
 
   const [pricing, setPricing] = useState<any[]>([]);
   const [costs, setCosts] = useState<any[]>([]);
@@ -45,7 +45,7 @@ function AdminFinanceiro() {
   const [fStatus, setFStatus] = useState<"all" | "pago" | "pendente">("all");
   const [fDay, setFDay] = useState<string>("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const from = format(startOfMonth(monthDate), "yyyy-MM-dd");
     const to = format(endOfMonth(monthDate), "yyyy-MM-dd");
     const [{ data: pr }, { data: cs }, { data: bs }, { data: ops }] = await Promise.all([
@@ -66,8 +66,8 @@ function AdminFinanceiro() {
       const { data: pf } = await supabase.from("profiles").select("id, full_name").in("id", ids);
       setProfiles(Object.fromEntries((pf ?? []).map((p: any) => [p.id, p])));
     } else setProfiles({});
-  };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [ym]);
+  }, [monthDate]);
+  useEffect(() => { void load(); }, [load]);
 
   const savePrice = async (id: string, price_cents: number) => {
     const { error } = await supabase.from("pricing").update({ price_cents }).eq("id", id);

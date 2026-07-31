@@ -11,11 +11,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { getAudience, clearAudience } from "@/lib/session-audience";
 
 export const Route = createFileRoute("/_authenticated/admin")({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) throw redirect({ to: "/auth" });
-    // Sessão precisa ter sido aberta como "equipe" — alunos não acessam admin
-    // mesmo que a conta tenha papel administrativo.
     const audience = getAudience();
     if (audience !== "equipe") {
       throw redirect({ to: "/app" });
@@ -25,14 +23,37 @@ export const Route = createFileRoute("/_authenticated/admin")({
       .select("role")
       .eq("user_id", u.user.id);
     const isAdmin = (roles ?? []).some((r) => r.role === "admin");
-    if (!isAdmin) throw redirect({ to: "/app" });
+    const isProfessor = (roles ?? []).some((r) => r.role === "professor");
+    if (!isAdmin && !isProfessor) throw redirect({ to: "/app" });
+
+    const staffRole = isAdmin ? "admin" as const : "professor" as const;
+    if (
+      staffRole === "professor"
+      && !PROFESSOR_PATHS.some((path) =>
+        path === "/admin"
+          ? location.pathname === path || location.pathname === `${path}/`
+          : location.pathname === path || location.pathname.startsWith(`${path}/`),
+      )
+    ) {
+      throw redirect({ to: "/admin" });
+    }
+
+    return { staffRole };
   },
   component: AdminShell,
 });
 
-// ON COURT — menu lateral agrupado por domínio (design-system §7). Cada grupo
-// tem um rótulo eyebrow; item ativo é pill.
-const NAV: SideNavGroup[] = [
+const PROFESSOR_PATHS = [
+  "/admin",
+  "/admin/reservas",
+  "/admin/bloqueios",
+  "/admin/alunos",
+  "/admin/aluno",
+  "/admin/avaliacoes",
+  "/admin/feedbacks",
+];
+
+const ADMIN_NAV: SideNavGroup[] = [
   {
     label: "Operação",
     items: [
@@ -82,8 +103,28 @@ const NAV: SideNavGroup[] = [
   },
 ];
 
+const PROFESSOR_NAV: SideNavGroup[] = [
+  {
+    label: "Operação",
+    items: [
+      { to: "/admin", label: "Minha agenda", icon: LayoutDashboard, exact: true },
+      { to: "/admin/reservas", label: "Reservas", icon: CalendarClock },
+      { to: "/admin/bloqueios", label: "Meus bloqueios", icon: Lock },
+    ],
+  },
+  {
+    label: "Alunos",
+    items: [
+      { to: "/admin/alunos", label: "Meus alunos", icon: Users },
+      { to: "/admin/avaliacoes", label: "Avaliações", icon: Award },
+      { to: "/admin/feedbacks", label: "Feedbacks", icon: MessageSquareHeart },
+    ],
+  },
+];
+
 function AdminShell() {
   const navigate = useNavigate();
+  const { staffRole } = Route.useRouteContext();
   const [name, setName] = useState("");
 
   useEffect(() => {
@@ -106,13 +147,13 @@ function AdminShell() {
     <>
       <Toaster />
       <SidebarShell
-        groups={NAV}
+        groups={staffRole === "admin" ? ADMIN_NAV : PROFESSOR_NAV}
         user={{ name }}
         onLogout={handleLogout}
         homeTo="/admin"
         badge={
           <span className="ml-1 hidden rounded-full bg-primary/15 px-2.5 py-1 type-micro font-bold text-foreground sm:inline-block">
-            Admin
+            {staffRole === "admin" ? "Admin" : "Professor"}
           </span>
         }
         headerRight={

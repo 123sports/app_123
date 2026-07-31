@@ -24,7 +24,9 @@ type Block = {
 const HOURS = Array.from({ length: 17 }, (_, i) => i + 6);
 
 function AdminBloqueios() {
+  const { staffRole } = Route.useRouteContext();
   const [rows, setRows] = useState<Block[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
   const [names, setNames] = useState<Record<string, string>>({});
   const [professors, setProfessors] = useState<{ id: string; full_name: string | null }[]>([]);
   const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
@@ -44,7 +46,7 @@ function AdminBloqueios() {
     const ids = new Set<string>();
     (data ?? []).forEach((r: Block) => { if (r.professor_id) ids.add(r.professor_id); });
     if (ids.size) {
-      const { data: pf } = await supabase.from("profiles").select("id, full_name").in("id", [...ids]);
+      const { data: pf } = await (supabase as any).from("profiles_public").select("id, full_name").in("id", [...ids]);
       setNames(Object.fromEntries((pf ?? []).map((p: any) => [p.id, p.full_name ?? "—"])));
     }
   };
@@ -52,14 +54,20 @@ function AdminBloqueios() {
   useEffect(() => {
     (async () => {
       load();
-      const { data: profIds } = await supabase.from("user_roles").select("user_id").eq("role", "professor");
-      const ids = (profIds ?? []).map((r: any) => r.user_id);
-      if (ids.length) {
-        const { data: pf } = await supabase.from("profiles").select("id, full_name").in("id", ids);
-        setProfessors(pf ?? []);
+      const { data: auth } = await supabase.auth.getUser();
+      setUserId(auth.user?.id ?? null);
+      if (staffRole === "professor" && auth.user) {
+        setProfId(auth.user.id);
+      } else {
+        const { data: profIds } = await supabase.from("user_roles").select("user_id").eq("role", "professor");
+        const ids = (profIds ?? []).map((r: any) => r.user_id);
+        if (ids.length) {
+          const { data: pf } = await (supabase as any).from("profiles_public").select("id, full_name").in("id", ids);
+          setProfessors(pf ?? []);
+        }
       }
     })();
-  }, []);
+  }, [staffRole]);
 
   const toggle = (h: number) => {
     playPop();
@@ -104,9 +112,11 @@ function AdminBloqueios() {
   return (
     <div className="space-y-4">
       <PageHeader
-        eyebrow="Admin · Bloqueios"
+        eyebrow={`${staffRole === "admin" ? "Admin" : "Professor"} · Bloqueios`}
         title="Bloqueios de horário"
-        subtitle="Trave horários quando a quadra estiver indisponível (manutenção, compromisso, evento)."
+        subtitle={staffRole === "admin"
+          ? "Trave horários quando a quadra estiver indisponível."
+          : "Bloqueie horários em que você não poderá ministrar aulas."}
       />
 
       <div className="plane">
@@ -122,19 +132,26 @@ function AdminBloqueios() {
                 className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
               />
             </div>
-            <div>
-              <label className="type-eyebrow mb-1 block">Aplica a</label>
-              <select
-                value={profId}
-                onChange={(e) => setProfId(e.target.value)}
-                className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="">Quadra toda (geral)</option>
-                {professors.map((p) => (
-                  <option key={p.id} value={p.id}>Só prof. {p.full_name ?? "—"}</option>
-                ))}
-              </select>
-            </div>
+            {staffRole === "admin" ? (
+              <div>
+                <label className="type-eyebrow mb-1 block">Aplica a</label>
+                <select
+                  value={profId}
+                  onChange={(e) => setProfId(e.target.value)}
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Quadra toda (geral)</option>
+                  {professors.map((p) => (
+                    <option key={p.id} value={p.id}>Só prof. {p.full_name ?? "—"}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <span className="type-eyebrow mb-1 block">Aplica a</span>
+                <p className="rounded-xl border border-border bg-secondary px-3 py-2 text-sm">Minha agenda</p>
+              </div>
+            )}
             <div>
               <label className="type-eyebrow mb-1 block">Motivo (opcional)</label>
               <input
@@ -192,9 +209,11 @@ function AdminBloqueios() {
                     </div>
                   </div>
                 </div>
-                <button onClick={() => remove(r.id)} className="btn-bounce rounded-full border border-border p-2 hover:bg-destructive/10">
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </button>
+                {(staffRole === "admin" || r.blocked_by === userId) && (
+                  <button onClick={() => remove(r.id)} className="btn-bounce rounded-full border border-border p-2 hover:bg-destructive/10">
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </button>
+                )}
               </li>
             ))}
           </ul>

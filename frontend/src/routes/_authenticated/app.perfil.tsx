@@ -124,12 +124,26 @@ function Perfil() {
     setSaving(true);
     try {
       const payload = {
-        id: userId,
-        ...p,
+        full_name: p.full_name,
+        avatar_url: p.avatar_url,
+        phone: p.phone,
         birth_date: p.birth_date || null,
+        blood_type: p.blood_type,
         years_playing: p.years_playing ? Number(p.years_playing) : null,
+        skill_level: p.skill_level,
+        emergency_contact_name: p.emergency_contact_name,
+        emergency_contact_phone: p.emergency_contact_phone,
+        medical_notes: p.medical_notes,
+        bio: p.bio,
+        dominant_hand: p.dominant_hand,
+        cpf: p.cpf,
+        address: p.address,
+        guardian_name: p.guardian_name,
+        guardian_cpf: p.guardian_cpf,
+        guardian_email: p.guardian_email,
+        guardian_phone: p.guardian_phone,
       };
-      const { error } = await supabase.from("profiles").upsert(payload);
+      const { error } = await supabase.from("profiles").update(payload).eq("id", userId);
       if (error) throw error;
       toast.success("Perfil salvo!");
     } catch (e: any) {
@@ -259,10 +273,14 @@ function Perfil() {
                 <Select value={p.dominant_hand ?? ""} onChange={(v) => set("dominant_hand", v)} options={HANDS} placeholder="Selecione" />
               </Field>
               <Field label="Jogos ganhos">
-                <Input type="number" min="0" value={String(p.games_won ?? 0)} onChange={(v) => set("games_won", Number(v) || 0)} />
+                <div className="border border-input bg-muted/40 px-4 py-2.5 text-sm font-medium">
+                  {p.games_won ?? 0}
+                </div>
               </Field>
               <Field label="Aces">
-                <Input type="number" min="0" value={String(p.aces ?? 0)} onChange={(v) => set("aces", Number(v) || 0)} />
+                <div className="border border-input bg-muted/40 px-4 py-2.5 text-sm font-medium">
+                  {p.aces ?? 0}
+                </div>
               </Field>
               <Field label="Bio" className="md:col-span-2">
                 <Textarea value={p.bio ?? ""} onChange={(v) => set("bio", v)} placeholder="Conte um pouco sobre você como jogador" />

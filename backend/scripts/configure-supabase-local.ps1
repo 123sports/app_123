@@ -44,12 +44,15 @@ $environment = @(
   "VITE_SUPABASE_URL=$supabaseUrl"
   "VITE_SUPABASE_PUBLISHABLE_KEY=$publishableKey"
   "VITE_ENABLE_LOCAL_MODE=false"
+  "VITE_PAYMENT_PROVIDER=local"
   ""
   "SUPABASE_URL=$supabaseUrl"
   "SUPABASE_PUBLISHABLE_KEY=$publishableKey"
   "SUPABASE_SECRET_KEY=$secretKey"
   ""
   "PAYMENT_PROVIDER=local"
+  "ALLOW_LOCAL_PAYMENT_SIMULATION=true"
+  "APP_BASE_URL=http://127.0.0.1:4173"
 ) -join [Environment]::NewLine
 
 [IO.File]::WriteAllText(

@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS public.staff_invites (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT NOT NULL,
   role public.app_role NOT NULL,
-  token TEXT NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(24), 'hex'),
+  token TEXT NOT NULL UNIQUE DEFAULT encode(extensions.gen_random_bytes(24), 'hex'),
   invited_by UUID NOT NULL,
   status TEXT NOT NULL DEFAULT 'pendente', -- pendente | aceito | expirado | cancelado
   accepted_at TIMESTAMPTZ,

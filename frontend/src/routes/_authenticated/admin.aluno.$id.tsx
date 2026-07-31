@@ -11,6 +11,7 @@ export const Route = createFileRoute("/_authenticated/admin/aluno/$id")({
 
 function AlunoDetalhe() {
   const { id } = Route.useParams();
+  const { staffRole } = Route.useRouteContext();
   const [profile, setProfile] = useState<any>(null);
   const [bookings, setBookings] = useState<any[]>([]);
   const [points, setPoints] = useState(0);
@@ -19,9 +20,15 @@ function AlunoDetalhe() {
   useEffect(() => {
     (async () => {
       const [{ data: p }, { data: bs }, { data: ev }] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", id).maybeSingle(),
-        supabase.from("bookings").select("*").eq("user_id", id).order("booking_date", { ascending: false }),
-        supabase.from("gamification_events").select("points").eq("user_id", id),
+        (supabase as any).rpc("get_student_for_professor", { _student_id: id }),
+        supabase
+          .from("bookings")
+          .select("id, booking_date, start_hour, type, status, payment_status, amount_cents, attended")
+          .eq("user_id", id)
+          .order("booking_date", { ascending: false }),
+        staffRole === "admin"
+          ? supabase.from("gamification_events").select("points").eq("user_id", id)
+          : Promise.resolve({ data: [] }),
       ]);
       setProfile(p);
       setBookings(bs ?? []);
@@ -31,7 +38,7 @@ function AlunoDetalhe() {
         setAvatar(signed?.signedUrl ?? null);
       }
     })();
-  }, [id]);
+  }, [id, staffRole]);
 
   const total = bookings.length;
   const attended = bookings.filter((b) => b.attended === true).length;
@@ -62,20 +69,26 @@ function AlunoDetalhe() {
                 {profile.skill_level && <span>· {profile.skill_level}</span>}
               </div>
             </div>
-            <div className="text-right">
-              <div className="type-eyebrow">Pontos</div>
-              <div className="flex items-center justify-end gap-1 text-2xl font-bold type-data text-primary">
-                <Trophy className="h-5 w-5" /> {points}
+            {staffRole === "admin" && (
+              <div className="text-right">
+                <div className="type-eyebrow">Pontos</div>
+                <div className="flex items-center justify-end gap-1 text-2xl font-bold type-data text-primary">
+                  <Trophy className="h-5 w-5" /> {points}
+                </div>
               </div>
-            </div>
+            )}
           </header>
 
-          <section className="grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <section className={`grid auto-rows-fr gap-4 sm:grid-cols-2 ${staffRole === "admin" ? "lg:grid-cols-5" : "lg:grid-cols-3"}`}>
             <Mini label="Reservas" value={total} />
             <Mini label="Presenças" value={attended} accent="good" />
             <Mini label="Faltas" value={missed} accent="bad" />
-            <Mini label="Pgto. pendente" value={unpaid} accent={unpaid ? "bad" : undefined} />
-            <Mini label="Receita gerada" value={brl(revenue)} />
+            {staffRole === "admin" && (
+              <>
+                <Mini label="Pgto. pendente" value={unpaid} accent={unpaid ? "bad" : undefined} />
+                <Mini label="Receita gerada" value={brl(revenue)} />
+              </>
+            )}
           </section>
 
           <section className="grid auto-rows-fr gap-4 lg:grid-cols-2">

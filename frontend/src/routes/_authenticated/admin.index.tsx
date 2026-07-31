@@ -11,7 +11,7 @@ import { format, startOfMonth, endOfMonth, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
-  component: AdminDashboard,
+  component: StaffDashboard,
 });
 
 type BookingRow = {
@@ -25,6 +25,94 @@ type BookingRow = {
   amount_cents: number | null;
   payment_method: string | null;
 };
+
+function StaffDashboard() {
+  const { staffRole } = Route.useRouteContext();
+  return staffRole === "admin" ? <AdminDashboard /> : <ProfessorDashboard />;
+}
+
+function ProfessorDashboard() {
+  const [bookings, setBookings] = useState<BookingRow[]>([]);
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [feedbacks, setFeedbacks] = useState(0);
+
+  useEffect(() => {
+    (async () => {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const [{ data: rows }, { count }] = await Promise.all([
+        supabase
+          .from("bookings")
+          .select("id, user_id, booking_date, start_hour, type, status, payment_status, amount_cents, payment_method")
+          .gte("booking_date", today)
+          .neq("status", "cancelada")
+          .order("booking_date")
+          .order("start_hour")
+          .limit(50),
+        (supabase as any)
+          .from("professor_feedback")
+          .select("id", { count: "exact", head: true }),
+      ]);
+      const nextBookings = (rows ?? []) as BookingRow[];
+      setBookings(nextBookings);
+      setFeedbacks(count ?? 0);
+
+      const ids = [...new Set(nextBookings.map((booking) => booking.user_id))];
+      if (ids.length) {
+        const { data: profiles } = await (supabase as any)
+          .from("profiles_public")
+          .select("id, full_name")
+          .in("id", ids);
+        setNames(Object.fromEntries(
+          (profiles ?? []).map((profile: any) => [profile.id, profile.full_name ?? "Aluno"]),
+        ));
+      }
+    })();
+  }, []);
+
+  const today = format(new Date(), "yyyy-MM-dd");
+  const todayBookings = bookings.filter((booking) => booking.booking_date === today);
+  const studentCount = new Set(bookings.map((booking) => booking.user_id)).size;
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Professor · Painel"
+        title="Minha agenda"
+        subtitle={format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+      />
+      <div className="stack-app">
+        <section className="grid auto-rows-fr grid-cols-2 gap-4 lg:grid-cols-4">
+          <Stat to="/admin/reservas" icon={CalendarCheck} label="Aulas hoje" value={todayBookings.length} hint="Ver agenda" />
+          <Stat to="/admin/reservas" icon={CalendarCheck} label="Próximas aulas" value={bookings.length} hint="Ver reservas" />
+          <Stat to="/admin/alunos" icon={Users} label="Alunos vinculados" value={studentCount} hint="Ver alunos" />
+          <Stat to="/admin/feedbacks" icon={AlertCircle} label="Feedbacks" value={feedbacks} hint="Ver feedbacks" />
+        </section>
+
+        <section className="plane">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="type-h3">Próximos horários</h2>
+            <Link to="/admin/reservas" className="type-small font-bold hover:underline">Agenda completa</Link>
+          </div>
+          {bookings.length === 0 ? (
+            <p className="py-6 text-center type-small text-muted-foreground">Nenhuma aula agendada.</p>
+          ) : (
+            <PersonList>
+              {bookings.slice(0, 8).map((booking) => (
+                <PersonRow
+                  key={booking.id}
+                  to="/admin/aluno/$id"
+                  params={{ id: booking.user_id }}
+                  name={names[booking.user_id] ?? "Aluno"}
+                  meta={`${format(new Date(`${booking.booking_date}T00:00:00`), "dd/MM")} · ${String(booking.start_hour).padStart(2, "0")}:00 · ${booking.type.replace("_", " ")}`}
+                />
+              ))}
+            </PersonList>
+          )}
+        </section>
+      </div>
+    </>
+  );
+}
 
 function AdminDashboard() {
   const [bookingsMonth, setBookingsMonth] = useState<BookingRow[]>([]);
@@ -69,7 +157,7 @@ function AdminDashboard() {
           .slice(0, 8),
       );
     })();
-  }, []);
+  }, [today]);
 
   const revenue = bookingsMonth
     .filter((b) => b.payment_status === "pago")

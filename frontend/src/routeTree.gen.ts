@@ -9,16 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RedefinirSenhaRouteImport } from './routes/redefinir-senha'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ConviteTokenRouteImport } from './routes/convite.$token'
 import { Route as ConviteCodeRouteImport } from './routes/convite.$code'
+import { Route as ConviteEquipeTokenRouteImport } from './routes/convite-equipe.$token'
 import { Route as AuthenticatedPitchRouteImport } from './routes/_authenticated/pitch'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAppIndexRouteImport } from './routes/_authenticated/app.index'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
+import { Route as ApiWebhooksMercadopagoRouteImport } from './routes/api.webhooks.mercadopago'
 import { Route as AuthenticatedAppPerfilRouteImport } from './routes/_authenticated/app.perfil'
 import { Route as AuthenticatedAppPagamentosRouteImport } from './routes/_authenticated/app.pagamentos'
 import { Route as AuthenticatedAppMatchAbertoRouteImport } from './routes/_authenticated/app.match-aberto'
@@ -51,6 +53,11 @@ import { Route as AuthenticatedAdminAulasContratosRouteImport } from './routes/_
 import { Route as AuthenticatedAdminAlunosRouteImport } from './routes/_authenticated/admin.alunos'
 import { Route as AuthenticatedAdminAlunoIdRouteImport } from './routes/_authenticated/admin.aluno.$id'
 
+const RedefinirSenhaRoute = RedefinirSenhaRouteImport.update({
+  id: '/redefinir-senha',
+  path: '/redefinir-senha',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -65,14 +72,14 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ConviteTokenRoute = ConviteTokenRouteImport.update({
-  id: '/convite/$token',
-  path: '/convite/$token',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ConviteCodeRoute = ConviteCodeRouteImport.update({
   id: '/convite/$code',
   path: '/convite/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConviteEquipeTokenRoute = ConviteEquipeTokenRouteImport.update({
+  id: '/convite-equipe/$token',
+  path: '/convite-equipe/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedPitchRoute = AuthenticatedPitchRouteImport.update({
@@ -99,6 +106,11 @@ const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthenticatedAdminRoute,
+} as any)
+const ApiWebhooksMercadopagoRoute = ApiWebhooksMercadopagoRouteImport.update({
+  id: '/api/webhooks/mercadopago',
+  path: '/api/webhooks/mercadopago',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAppPerfilRoute = AuthenticatedAppPerfilRouteImport.update({
   id: '/perfil',
@@ -284,11 +296,12 @@ const AuthenticatedAdminAlunoIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/app': typeof AuthenticatedAppRouteWithChildren
   '/pitch': typeof AuthenticatedPitchRoute
+  '/convite-equipe/$token': typeof ConviteEquipeTokenRoute
   '/convite/$code': typeof ConviteCodeRoute
-  '/convite/$token': typeof ConviteTokenRoute
   '/admin/alunos': typeof AuthenticatedAdminAlunosRoute
   '/admin/aulas-contratos': typeof AuthenticatedAdminAulasContratosRoute
   '/admin/aulas-planos': typeof AuthenticatedAdminAulasPlanosRoute
@@ -319,6 +332,7 @@ export interface FileRoutesByFullPath {
   '/app/match-aberto': typeof AuthenticatedAppMatchAbertoRoute
   '/app/pagamentos': typeof AuthenticatedAppPagamentosRoute
   '/app/perfil': typeof AuthenticatedAppPerfilRoute
+  '/api/webhooks/mercadopago': typeof ApiWebhooksMercadopagoRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/app/': typeof AuthenticatedAppIndexRoute
   '/admin/aluno/$id': typeof AuthenticatedAdminAlunoIdRoute
@@ -326,9 +340,10 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/pitch': typeof AuthenticatedPitchRoute
+  '/convite-equipe/$token': typeof ConviteEquipeTokenRoute
   '/convite/$code': typeof ConviteCodeRoute
-  '/convite/$token': typeof ConviteTokenRoute
   '/admin/alunos': typeof AuthenticatedAdminAlunosRoute
   '/admin/aulas-contratos': typeof AuthenticatedAdminAulasContratosRoute
   '/admin/aulas-planos': typeof AuthenticatedAdminAulasPlanosRoute
@@ -359,6 +374,7 @@ export interface FileRoutesByTo {
   '/app/match-aberto': typeof AuthenticatedAppMatchAbertoRoute
   '/app/pagamentos': typeof AuthenticatedAppPagamentosRoute
   '/app/perfil': typeof AuthenticatedAppPerfilRoute
+  '/api/webhooks/mercadopago': typeof ApiWebhooksMercadopagoRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/app': typeof AuthenticatedAppIndexRoute
   '/admin/aluno/$id': typeof AuthenticatedAdminAlunoIdRoute
@@ -368,11 +384,12 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/redefinir-senha': typeof RedefinirSenhaRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/app': typeof AuthenticatedAppRouteWithChildren
   '/_authenticated/pitch': typeof AuthenticatedPitchRoute
+  '/convite-equipe/$token': typeof ConviteEquipeTokenRoute
   '/convite/$code': typeof ConviteCodeRoute
-  '/convite/$token': typeof ConviteTokenRoute
   '/_authenticated/admin/alunos': typeof AuthenticatedAdminAlunosRoute
   '/_authenticated/admin/aulas-contratos': typeof AuthenticatedAdminAulasContratosRoute
   '/_authenticated/admin/aulas-planos': typeof AuthenticatedAdminAulasPlanosRoute
@@ -403,6 +420,7 @@ export interface FileRoutesById {
   '/_authenticated/app/match-aberto': typeof AuthenticatedAppMatchAbertoRoute
   '/_authenticated/app/pagamentos': typeof AuthenticatedAppPagamentosRoute
   '/_authenticated/app/perfil': typeof AuthenticatedAppPerfilRoute
+  '/api/webhooks/mercadopago': typeof ApiWebhooksMercadopagoRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/app/': typeof AuthenticatedAppIndexRoute
   '/_authenticated/admin/aluno/$id': typeof AuthenticatedAdminAlunoIdRoute
@@ -412,11 +430,12 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/redefinir-senha'
     | '/admin'
     | '/app'
     | '/pitch'
+    | '/convite-equipe/$token'
     | '/convite/$code'
-    | '/convite/$token'
     | '/admin/alunos'
     | '/admin/aulas-contratos'
     | '/admin/aulas-planos'
@@ -447,6 +466,7 @@ export interface FileRouteTypes {
     | '/app/match-aberto'
     | '/app/pagamentos'
     | '/app/perfil'
+    | '/api/webhooks/mercadopago'
     | '/admin/'
     | '/app/'
     | '/admin/aluno/$id'
@@ -454,9 +474,10 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/redefinir-senha'
     | '/pitch'
+    | '/convite-equipe/$token'
     | '/convite/$code'
-    | '/convite/$token'
     | '/admin/alunos'
     | '/admin/aulas-contratos'
     | '/admin/aulas-planos'
@@ -487,6 +508,7 @@ export interface FileRouteTypes {
     | '/app/match-aberto'
     | '/app/pagamentos'
     | '/app/perfil'
+    | '/api/webhooks/mercadopago'
     | '/admin'
     | '/app'
     | '/admin/aluno/$id'
@@ -495,11 +517,12 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/redefinir-senha'
     | '/_authenticated/admin'
     | '/_authenticated/app'
     | '/_authenticated/pitch'
+    | '/convite-equipe/$token'
     | '/convite/$code'
-    | '/convite/$token'
     | '/_authenticated/admin/alunos'
     | '/_authenticated/admin/aulas-contratos'
     | '/_authenticated/admin/aulas-planos'
@@ -530,6 +553,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app/match-aberto'
     | '/_authenticated/app/pagamentos'
     | '/_authenticated/app/perfil'
+    | '/api/webhooks/mercadopago'
     | '/_authenticated/admin/'
     | '/_authenticated/app/'
     | '/_authenticated/admin/aluno/$id'
@@ -539,12 +563,21 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  RedefinirSenhaRoute: typeof RedefinirSenhaRoute
+  ConviteEquipeTokenRoute: typeof ConviteEquipeTokenRoute
   ConviteCodeRoute: typeof ConviteCodeRoute
-  ConviteTokenRoute: typeof ConviteTokenRoute
+  ApiWebhooksMercadopagoRoute: typeof ApiWebhooksMercadopagoRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/redefinir-senha': {
+      id: '/redefinir-senha'
+      path: '/redefinir-senha'
+      fullPath: '/redefinir-senha'
+      preLoaderRoute: typeof RedefinirSenhaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -566,18 +599,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/convite/$token': {
-      id: '/convite/$token'
-      path: '/convite/$token'
-      fullPath: '/convite/$token'
-      preLoaderRoute: typeof ConviteTokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/convite/$code': {
       id: '/convite/$code'
       path: '/convite/$code'
       fullPath: '/convite/$code'
       preLoaderRoute: typeof ConviteCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/convite-equipe/$token': {
+      id: '/convite-equipe/$token'
+      path: '/convite-equipe/$token'
+      fullPath: '/convite-equipe/$token'
+      preLoaderRoute: typeof ConviteEquipeTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/pitch': {
@@ -614,6 +647,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/api/webhooks/mercadopago': {
+      id: '/api/webhooks/mercadopago'
+      path: '/api/webhooks/mercadopago'
+      fullPath: '/api/webhooks/mercadopago'
+      preLoaderRoute: typeof ApiWebhooksMercadopagoRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/app/perfil': {
       id: '/_authenticated/app/perfil'
@@ -938,8 +978,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  RedefinirSenhaRoute: RedefinirSenhaRoute,
+  ConviteEquipeTokenRoute: ConviteEquipeTokenRoute,
   ConviteCodeRoute: ConviteCodeRoute,
-  ConviteTokenRoute: ConviteTokenRoute,
+  ApiWebhooksMercadopagoRoute: ApiWebhooksMercadopagoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

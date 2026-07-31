@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
 export const LOCAL_DEV_EMAIL = 'local@123sports.dev';
-export const LOCAL_DEV_PASSWORD = '123456';
+export const LOCAL_DEV_PASSWORD = 'local123';
 
 const localSupabaseError = {
   message: 'Supabase is not configured in this local environment.',
@@ -32,6 +32,7 @@ const LOCAL_CHECKOUT_ORDERS_KEY = 'on_tennis_local_checkout_orders';
 const LOCAL_CHECKOUT_ITEMS_KEY = 'on_tennis_local_checkout_items';
 const LOCAL_PAYMENT_ATTEMPTS_KEY = 'on_tennis_local_payment_attempts';
 const LOCAL_NOTIFICATIONS_KEY = 'on_tennis_local_notifications';
+const LOCAL_STAFF_INVITES_KEY = 'on_tennis_local_staff_invites';
 
 const defaultLocalProfile = {
   id: localUser.id,
@@ -191,6 +192,8 @@ function localStorageKeyForTable(table: string) {
       return LOCAL_PAYMENT_ATTEMPTS_KEY;
     case 'notifications':
       return LOCAL_NOTIFICATIONS_KEY;
+    case 'staff_invites':
+      return LOCAL_STAFF_INVITES_KEY;
     default:
       return null;
   }
@@ -211,16 +214,27 @@ function normalizeLocalRow(table: string, row: Record<string, any>) {
     checkout_items: 'local-checkout-item',
     payment_attempts: 'local-payment',
     notifications: 'local-notification',
+    staff_invites: 'local-staff-invite',
   };
-  return {
+  const normalized = {
     ...row,
     id: row.id ?? localId(prefixes[table] ?? 'local-row'),
     created_at: row.created_at ?? now,
     updated_at: row.updated_at ?? now,
   };
+  if (table === 'staff_invites') {
+    return {
+      ...normalized,
+      token: row.token ?? crypto.randomUUID(),
+      status: row.status ?? 'pendente',
+      expires_at: row.expires_at ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      accepted_at: row.accepted_at ?? null,
+    };
+  }
+  return normalized;
 }
 
-function localRowsFor(table: string) {
+function localRowsFor(table: string): any[] {
   switch (table) {
     case 'profiles':
     case 'profiles_public':
@@ -251,13 +265,38 @@ function localRowsFor(table: string) {
       return readLocalCollection(LOCAL_PAYMENT_ATTEMPTS_KEY);
     case 'notifications':
       return readLocalCollection(LOCAL_NOTIFICATIONS_KEY);
+    case 'staff_invites':
+      return readLocalCollection(LOCAL_STAFF_INVITES_KEY);
+    case 'rpc:list_active_professors':
+      return [{
+        id: localUser.id,
+        full_name: localUser.user_metadata.full_name,
+        avatar_url: null,
+      }];
+    case 'rpc:list_students_for_staff': {
+      const bookings = readLocalCollection(LOCAL_BOOKINGS_KEY, localBookings);
+      return [{
+        id: localUser.id,
+        full_name: localUser.user_metadata.full_name,
+        phone: defaultLocalProfile.phone,
+        birth_date: defaultLocalProfile.birth_date,
+        skill_level: defaultLocalProfile.skill_level,
+        bookings: bookings.length,
+        attended: bookings.filter((booking: any) => booking.attended === true).length,
+        missed: bookings.filter((booking: any) => booking.attended === false).length,
+      }];
+    }
+    case 'rpc:get_student_for_professor':
+      return [readLocalProfile()];
+    case 'rpc:get_staff_invite_by_token':
+      return readLocalCollection(LOCAL_STAFF_INVITES_KEY);
     default:
       return [];
   }
 }
 
 function createLocalQueryBuilder(table: string) {
-  let singleResult = false;
+  let singleResult = table === 'rpc:get_student_for_professor';
   let writeOperation: 'insert' | 'update' | 'upsert' | 'delete' | null = null;
   let writePayload: unknown;
   let writeApplied = false;
@@ -386,19 +425,19 @@ function createLocalQueryBuilder(table: string) {
       filters.push((row) => row?.[column] !== value);
       return builder;
     },
-    gt: (column: string, value: unknown) => {
+    gt: (column: string, value: any) => {
       filters.push((row) => row?.[column] > value);
       return builder;
     },
-    gte: (column: string, value: unknown) => {
+    gte: (column: string, value: any) => {
       filters.push((row) => row?.[column] >= value);
       return builder;
     },
-    lt: (column: string, value: unknown) => {
+    lt: (column: string, value: any) => {
       filters.push((row) => row?.[column] < value);
       return builder;
     },
-    lte: (column: string, value: unknown) => {
+    lte: (column: string, value: any) => {
       filters.push((row) => row?.[column] <= value);
       return builder;
     },
@@ -459,7 +498,13 @@ function createLocalSupabaseClient() {
       },
       signUp: async () => {
         writeLocalSession(true);
-        return { data: { user: localUser, session: localSession }, error: null };
+        return {
+          data: {
+            user: { ...localUser, identities: [{ id: localUser.id }] },
+            session: localSession,
+          },
+          error: null,
+        };
       },
       signInWithPassword: async ({ email, password }: { email: string; password: string }) => {
         if (email.trim().toLowerCase() !== LOCAL_DEV_EMAIL || password !== LOCAL_DEV_PASSWORD) {
@@ -478,10 +523,31 @@ function createLocalSupabaseClient() {
         writeLocalSession(false);
         return { error: null };
       },
+      resetPasswordForEmail: async () => ({ data: {}, error: localSupabaseError }),
+      updateUser: async () => ({ data: { user: localUser }, error: localSupabaseError }),
+      onAuthStateChange: (callback: (event: string, session: typeof localSession | null) => void) => {
+        queueMicrotask(() => callback('INITIAL_SESSION', readLocalSession()));
+        return {
+          data: {
+            subscription: {
+              unsubscribe: () => undefined,
+            },
+          },
+        };
+      },
       setSession: async () => ({ data: { session: null, user: null }, error: localSupabaseError }),
     },
     from: (table: string) => createLocalQueryBuilder(table),
-    rpc: () => createLocalQueryBuilder('__rpc__'),
+    rpc: (functionName: string, args?: Record<string, unknown>) => {
+      if (functionName === 'accept_staff_invite') {
+        return Promise.resolve({ data: 'professor', error: null });
+      }
+      const query = createLocalQueryBuilder(`rpc:${functionName}`);
+      if (functionName === 'get_staff_invite_by_token' && args?._token) {
+        return query.eq('token', args._token);
+      }
+      return query;
+    },
     channel: () => ({
       on: function () {
         return this;
@@ -513,7 +579,7 @@ function createSupabaseClient() {
         'Supabase configuration is required. Local mock mode is disabled for this build.',
       );
     }
-    return createLocalSupabaseClient() as ReturnType<typeof createClient<Database>>;
+    return createLocalSupabaseClient() as unknown as ReturnType<typeof createClient<Database>>;
   }
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {

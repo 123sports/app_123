@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
@@ -77,13 +77,6 @@ export type Database = {
             referencedRelation: "bookings"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "booking_participants_booking_id_fkey"
-            columns: ["booking_id"]
-            isOneToOne: false
-            referencedRelation: "bookings_occupancy"
-            referencedColumns: ["id"]
-          },
         ]
       }
       bookings: {
@@ -92,9 +85,11 @@ export type Database = {
           attended: boolean | null
           booking_date: string
           card_operator_id: string | null
+          checkout_order_id: string | null
           confirmed_at: string | null
           created_at: string
           duration_hours: number
+          hold_expires_at: string | null
           id: string
           notes: string | null
           payment_method: string | null
@@ -112,9 +107,11 @@ export type Database = {
           attended?: boolean | null
           booking_date: string
           card_operator_id?: string | null
+          checkout_order_id?: string | null
           confirmed_at?: string | null
           created_at?: string
           duration_hours?: number
+          hold_expires_at?: string | null
           id?: string
           notes?: string | null
           payment_method?: string | null
@@ -132,9 +129,11 @@ export type Database = {
           attended?: boolean | null
           booking_date?: string
           card_operator_id?: string | null
+          checkout_order_id?: string | null
           confirmed_at?: string | null
           created_at?: string
           duration_hours?: number
+          hold_expires_at?: string | null
           id?: string
           notes?: string | null
           payment_method?: string | null
@@ -147,7 +146,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "bookings_checkout_order_id_fkey"
+            columns: ["checkout_order_id"]
+            isOneToOne: false
+            referencedRelation: "checkout_orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       card_operators: {
         Row: {
@@ -213,6 +220,110 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      checkout_items: {
+        Row: {
+          checkout_order_id: string
+          created_at: string
+          description: string
+          id: string
+          item_type: string
+          metadata: Json
+          quantity: number
+          reference_id: string | null
+          total_amount_cents: number
+          unit_amount_cents: number
+        }
+        Insert: {
+          checkout_order_id: string
+          created_at?: string
+          description: string
+          id?: string
+          item_type: string
+          metadata?: Json
+          quantity?: number
+          reference_id?: string | null
+          total_amount_cents: number
+          unit_amount_cents: number
+        }
+        Update: {
+          checkout_order_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+          item_type?: string
+          metadata?: Json
+          quantity?: number
+          reference_id?: string | null
+          total_amount_cents?: number
+          unit_amount_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkout_items_checkout_order_id_fkey"
+            columns: ["checkout_order_id"]
+            isOneToOne: false
+            referencedRelation: "checkout_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checkout_orders: {
+        Row: {
+          amount_cents: number
+          cancelled_at: string | null
+          created_at: string
+          currency: string
+          description: string
+          expires_at: string | null
+          id: string
+          idempotency_key: string
+          kind: string
+          metadata: Json
+          paid_at: string | null
+          provider: string
+          refunded_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_cents: number
+          cancelled_at?: string | null
+          created_at?: string
+          currency?: string
+          description: string
+          expires_at?: string | null
+          id?: string
+          idempotency_key?: string
+          kind: string
+          metadata?: Json
+          paid_at?: string | null
+          provider?: string
+          refunded_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number
+          cancelled_at?: string | null
+          created_at?: string
+          currency?: string
+          description?: string
+          expires_at?: string | null
+          id?: string
+          idempotency_key?: string
+          kind?: string
+          metadata?: Json
+          paid_at?: string | null
+          provider?: string
+          refunded_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       class_contracts: {
         Row: {
@@ -892,6 +1003,118 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_attempts: {
+        Row: {
+          amount_cents: number
+          checkout_order_id: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          paid_at: string | null
+          payment_method: string
+          provider: string
+          provider_order_id: string | null
+          provider_payload: Json
+          provider_payment_id: string | null
+          qr_code: string | null
+          qr_code_base64: string | null
+          status: string
+          ticket_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          checkout_order_id: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          paid_at?: string | null
+          payment_method: string
+          provider: string
+          provider_order_id?: string | null
+          provider_payload?: Json
+          provider_payment_id?: string | null
+          qr_code?: string | null
+          qr_code_base64?: string | null
+          status?: string
+          ticket_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          checkout_order_id?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          paid_at?: string | null
+          payment_method?: string
+          provider?: string
+          provider_order_id?: string | null
+          provider_payload?: Json
+          provider_payment_id?: string | null
+          qr_code?: string | null
+          qr_code_base64?: string | null
+          status?: string
+          ticket_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_attempts_checkout_order_id_fkey"
+            columns: ["checkout_order_id"]
+            isOneToOne: false
+            referencedRelation: "checkout_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          payload: Json
+          payment_attempt_id: string | null
+          processed_at: string | null
+          processing_error: string | null
+          provider: string
+          provider_event_id: string
+          signature_valid: boolean
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          payload?: Json
+          payment_attempt_id?: string | null
+          processed_at?: string | null
+          processing_error?: string | null
+          provider: string
+          provider_event_id: string
+          signature_valid?: boolean
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json
+          payment_attempt_id?: string | null
+          processed_at?: string | null
+          processing_error?: string | null
+          provider?: string
+          provider_event_id?: string
+          signature_valid?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_events_payment_attempt_id_fkey"
+            columns: ["payment_attempt_id"]
+            isOneToOne: false
+            referencedRelation: "payment_attempts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_terms: {
         Row: {
           active: boolean
@@ -1319,7 +1542,10 @@ export type Database = {
       bookings_occupancy: {
         Row: {
           booking_date: string | null
+          checkout_order_id: string | null
+          hold_expires_at: string | null
           id: string | null
+          payment_status: string | null
           professor_id: string | null
           start_hour: number | null
           status: Database["public"]["Enums"]["booking_status"] | null
@@ -1328,21 +1554,27 @@ export type Database = {
         }
         Insert: {
           booking_date?: string | null
-          id?: string | null
-          professor_id?: string | null
+          checkout_order_id?: never
+          hold_expires_at?: never
+          id?: never
+          payment_status?: never
+          professor_id?: never
           start_hour?: number | null
           status?: Database["public"]["Enums"]["booking_status"] | null
           type?: Database["public"]["Enums"]["booking_type"] | null
-          user_id?: string | null
+          user_id?: never
         }
         Update: {
           booking_date?: string | null
-          id?: string | null
-          professor_id?: string | null
+          checkout_order_id?: never
+          hold_expires_at?: never
+          id?: never
+          payment_status?: never
+          professor_id?: never
           start_hour?: number | null
           status?: Database["public"]["Enums"]["booking_status"] | null
           type?: Database["public"]["Enums"]["booking_type"] | null
-          user_id?: string | null
+          user_id?: never
         }
         Relationships: []
       }
@@ -1356,8 +1588,6 @@ export type Database = {
           full_name: string | null
           games_won: number | null
           id: string | null
-          referral_code: string | null
-          referred_by: string | null
           skill_level: string | null
           years_playing: number | null
         }
@@ -1370,8 +1600,6 @@ export type Database = {
           full_name?: string | null
           games_won?: number | null
           id?: string | null
-          referral_code?: string | null
-          referred_by?: string | null
           skill_level?: string | null
           years_playing?: number | null
         }
@@ -1384,8 +1612,6 @@ export type Database = {
           full_name?: string | null
           games_won?: number | null
           id?: string | null
-          referral_code?: string | null
-          referred_by?: string | null
           skill_level?: string | null
           years_playing?: number | null
         }
@@ -1393,6 +1619,29 @@ export type Database = {
       }
     }
     Functions: {
+      accept_staff_invite: {
+        Args: { _token: string }
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
+      approve_local_booking_checkout: {
+        Args: { p_order_id: string; p_user_id: string }
+        Returns: undefined
+      }
+      cancel_booking_checkout: {
+        Args: { p_order_id: string; p_user_id: string }
+        Returns: undefined
+      }
+      cleanup_expired_booking_holds: { Args: never; Returns: number }
+      create_booking_checkout_hold: {
+        Args: {
+          p_booking_date: string
+          p_booking_type: Database["public"]["Enums"]["booking_type"]
+          p_hours: number[]
+          p_professor_id?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       generate_referral_code: { Args: never; Returns: string }
       get_default_coach_profile: {
         Args: never
@@ -1402,6 +1651,14 @@ export type Database = {
           is_default: boolean
           venue_address: string
           venue_name: string
+        }[]
+      }
+      get_my_referred_people: {
+        Args: never
+        Returns: {
+          created_at: string
+          full_name: string
+          id: string
         }[]
       }
       get_players_stats: {
@@ -1422,6 +1679,15 @@ export type Database = {
           next_tier_at: number
           next_tier_discount: number
           total_referrals: number
+        }[]
+      }
+      get_staff_invite_by_token: {
+        Args: { _token: string }
+        Returns: {
+          email: string
+          expires_at: string
+          role: Database["public"]["Enums"]["app_role"]
+          status: string
         }[]
       }
       get_student_for_professor: {
@@ -1462,6 +1728,27 @@ export type Database = {
       is_open_match_participant: {
         Args: { _match_id: string; _user_id: string }
         Returns: boolean
+      }
+      list_active_professors: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          full_name: string
+          id: string
+        }[]
+      }
+      list_students_for_staff: {
+        Args: never
+        Returns: {
+          attended: number
+          birth_date: string
+          bookings: number
+          full_name: string
+          id: string
+          missed: number
+          phone: string
+          skill_level: string
+        }[]
       }
     }
     Enums: {

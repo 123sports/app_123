@@ -12,8 +12,6 @@ export const Route = createFileRoute("/_authenticated/admin/equipe")({
   component: AdminEquipe,
 });
 
-const MASTER_EMAIL = "bruno@oddrive.com.br";
-
 function AdminEquipe() {
   const [tab, setTab] = useState<"membros" | "coaches">("membros");
   return (
@@ -37,7 +35,7 @@ function AdminEquipe() {
 }
 
 function TeamPanel() {
-  const [isMaster, setIsMaster] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [invites, setInvites] = useState<any[]>([]);
   const [team, setTeam] = useState<any[]>([]);
   const [email, setEmail] = useState("");
@@ -58,7 +56,13 @@ function TeamPanel() {
   useEffect(() => {
     (async () => {
       const { data: u } = await supabase.auth.getUser();
-      setIsMaster((u.user?.email ?? "").toLowerCase() === MASTER_EMAIL);
+      if (!u.user) return;
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", u.user.id)
+        .eq("role", "admin");
+      setIsAdmin((roles ?? []).length > 0);
     })();
     load();
   }, []);
@@ -68,7 +72,7 @@ function TeamPanel() {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
     const { error } = await supabase.from("staff_invites").insert({
-      email: email.toLowerCase(), role, invited_by: u.user.id,
+      email: email.trim().toLowerCase(), role, invited_by: u.user.id,
     });
     if (error) return toast.error(error?.message ?? "Não foi possível criar o convite. Tente de novo.");
     setEmail("");
@@ -77,25 +81,34 @@ function TeamPanel() {
   };
 
   const cancel = async (id: string) => {
-    await supabase.from("staff_invites").update({ status: "cancelado" }).eq("id", id);
+    const { error } = await supabase.from("staff_invites").update({ status: "cancelado" }).eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     load();
   };
 
   const copyLink = async (token: string) => {
-    const url = `${window.location.origin}/convite/${token}`;
+    const url = `${window.location.origin}/convite-equipe/${token}`;
     await navigator.clipboard.writeText(url);
     toast.success("Link copiado");
   };
 
   const removeRole = async (user_id: string, r: string) => {
     if (!confirm("Remover esse papel?")) return;
-    await supabase.from("user_roles").delete().eq("user_id", user_id).eq("role", r as any);
+    const { error } = await supabase.from("user_roles").delete().eq("user_id", user_id).eq("role", r as any);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("Papel removido.");
     load();
   };
 
   return (
     <div className="space-y-4">
-      {isMaster ? (
+      {isAdmin ? (
         <section className="plane">
           <h2 className="type-h3 mb-3">Novo convite</h2>
           <div className="grid gap-2 sm:grid-cols-[1fr_160px_auto]">
@@ -116,7 +129,7 @@ function TeamPanel() {
         </section>
       ) : (
         <section className="plane type-small text-muted-foreground">
-          Apenas o administrador master pode convidar ou aprovar novos membros da equipe.
+          Apenas administradores podem convidar ou aprovar novos membros da equipe.
         </section>
       )}
 
@@ -140,7 +153,7 @@ function TeamPanel() {
                   <button onClick={() => copyLink(i.token)} className="btn-bounce inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs hover:bg-accent">
                     <Copy className="h-3 w-3" /> Copiar link
                   </button>
-                  {isMaster && (
+                  {isAdmin && (
                     <button onClick={() => cancel(i.id)} className="btn-bounce text-destructive">
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -164,7 +177,7 @@ function TeamPanel() {
                 <div className="type-small text-muted-foreground">{t.profile?.phone ?? ""}</div>
               </div>
               <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">{t.role}</span>
-              {isMaster && (
+              {isAdmin && (
                 <button onClick={() => removeRole(t.user_id, t.role)} className="btn-bounce text-destructive">
                   <Trash2 className="h-4 w-4" />
                 </button>
