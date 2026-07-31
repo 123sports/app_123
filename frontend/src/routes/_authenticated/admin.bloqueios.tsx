@@ -59,12 +59,8 @@ function AdminBloqueios() {
       if (staffRole === "professor" && auth.user) {
         setProfId(auth.user.id);
       } else {
-        const { data: profIds } = await supabase.from("user_roles").select("user_id").eq("role", "professor");
-        const ids = (profIds ?? []).map((r: any) => r.user_id);
-        if (ids.length) {
-          const { data: pf } = await (supabase as any).from("profiles_public").select("id, full_name").in("id", ids);
-          setProfessors(pf ?? []);
-        }
+        const { data: professorRows } = await (supabase as any).rpc("list_active_professors");
+        setProfessors(professorRows ?? []);
       }
     })();
   }, [staffRole]);
