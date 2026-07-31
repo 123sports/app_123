@@ -2,6 +2,9 @@
   "name": "123sports",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "frontend"
+  ],
   "engines": {
     "node": "22.x"
   },
