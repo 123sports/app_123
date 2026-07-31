@@ -101,5 +101,8 @@
     "vite": {
       "esbuild": "^0.28.1"
     }
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.61.1"
   }
 }
