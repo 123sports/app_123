@@ -24,7 +24,16 @@ export function withSecurityHeaders(response: Response, request: Request): Respo
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-Frame-Options", "DENY");
 
-  if (new URL(request.url).protocol === "https:") {
+  const forwardedProtocol = request.headers
+    .get("x-forwarded-proto")
+    ?.split(",", 1)[0]
+    ?.trim()
+    .toLowerCase();
+  const isHttps = forwardedProtocol
+    ? forwardedProtocol === "https"
+    : new URL(request.url).protocol === "https:";
+
+  if (isHttps) {
     headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   }
 
