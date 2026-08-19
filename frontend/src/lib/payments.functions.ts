@@ -38,6 +38,44 @@ type HoldResult = {
   idempotency_key: string;
 };
 
+function safeMercadoPagoError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return { message: String(error || "unknown_error") };
+  }
+
+  const record = error as Record<string, unknown>;
+  const details: Record<string, unknown> = {};
+  for (const key of [
+    "message",
+    "error",
+    "status",
+    "statusCode",
+    "cause",
+    "code",
+  ]) {
+    if (record[key] !== undefined) details[key] = record[key];
+  }
+
+  if (error instanceof Error) {
+    details.message = error.message;
+    details.name = error.name;
+  }
+
+  return Object.keys(details).length > 0 ? details : { message: "unknown_error" };
+}
+
+function isValidCpf(cpf: string) {
+  if (!/^\d{11}$/.test(cpf) || /^(\d)\1{10}$/.test(cpf)) return false;
+  const digit = (base: string, factor: number) => {
+    let sum = 0;
+    for (const char of base) sum += Number(char) * factor--;
+    const rest = (sum * 10) % 11;
+    return rest === 10 ? 0 : rest;
+  };
+  return digit(cpf.slice(0, 9), 10) === Number(cpf[9])
+    && digit(cpf.slice(0, 10), 11) === Number(cpf[10]);
+}
+
 function localPaymentSimulationAllowed() {
   const baseUrl = process.env.APP_BASE_URL?.trim() ?? "";
   return process.env.PAYMENT_PROVIDER === "local"
@@ -61,6 +99,29 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
     const localSimulation = localPaymentSimulationAllowed();
     if (!localSimulation && !isMercadoPagoConfigured()) {
       throw new Error("Mercado Pago ainda nao foi configurado no servidor.");
+    }
+
+    let productionPayer: { email: string; fullName?: string | null; cpf: string } | null = null;
+    if (!localSimulation) {
+      const [{ data: authUser }, { data: profile }] = await Promise.all([
+        supabaseAdmin.auth.admin.getUserById(context.userId),
+        supabaseAdmin
+          .from("profiles")
+          .select("full_name, cpf")
+          .eq("id", context.userId)
+          .maybeSingle(),
+      ]);
+      const email = authUser.user?.email;
+      if (!email) throw new Error("A conta precisa ter um e-mail valido para pagar.");
+      const cpfDigits = String((profile as any)?.cpf ?? "").replace(/\D/g, "");
+      if (!isValidCpf(cpfDigits)) {
+        throw new Error("Preencha um CPF valido em Perfil antes de pagar com Pix.");
+      }
+      productionPayer = {
+        email,
+        fullName: profile?.full_name,
+        cpf: cpfDigits,
+      };
     }
 
     const uniqueHours = [...new Set(data.hours)].sort((a, b) => a - b);
@@ -124,19 +185,9 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
       };
     }
 
-    const [{ data: authUser }, { data: profile }] = await Promise.all([
-      supabaseAdmin.auth.admin.getUserById(context.userId),
-      supabaseAdmin
-        .from("profiles")
-        .select("full_name, cpf")
-        .eq("id", context.userId)
-        .maybeSingle(),
-    ]);
-    const email = authUser.user?.email;
-    if (!email) throw new Error("A conta precisa ter um e-mail valido para pagar.");
-
     let providerPayment: any;
     try {
+      if (!productionPayer) throw new Error("Dados do pagador indisponiveis.");
       providerPayment = await createMercadoPagoPix({
         orderId: hold.order_id,
         idempotencyKey: hold.idempotency_key,
@@ -144,15 +195,15 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
         description: hold.description,
         expiresAt: hold.expires_at,
         payer: {
-          email,
-          fullName: profile?.full_name,
-          cpf: (profile as any)?.cpf,
+          email: productionPayer.email,
+          fullName: productionPayer.fullName,
+          cpf: productionPayer.cpf,
         },
       });
     } catch (error) {
       console.error("[MercadoPago] Pix creation failed", {
         orderId: hold.order_id,
-        error: error instanceof Error ? error.message : "unknown_error",
+        error: safeMercadoPagoError(error),
       });
       throw new Error(
         "Nao foi possivel gerar o Pix agora. A reserva temporaria expirara automaticamente.",
