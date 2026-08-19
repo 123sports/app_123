@@ -1760,6 +1760,7 @@ export type Database = {
         | "aula_dupla"
         | "aula_trio"
         | "aula_quarteto"
+        | "teste"
       contract_signer: "aluno" | "admin"
       contract_status:
         | "rascunho"
@@ -1905,6 +1906,7 @@ export const Constants = {
         "aula_dupla",
         "aula_trio",
         "aula_quarteto",
+        "teste",
       ],
       contract_signer: ["aluno", "admin"],
       contract_status: [

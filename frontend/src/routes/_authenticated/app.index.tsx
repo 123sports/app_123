@@ -198,5 +198,6 @@ export function labelType(t: string) {
     aula_dupla: "Aula em dupla",
     aula_trio: "Aula em trio",
     aula_quarteto: "Aula em quarteto",
+    teste: "Teste",
   }[t] ?? t;
 }

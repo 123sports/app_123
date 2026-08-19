@@ -30,6 +30,7 @@ const TYPES = [
   { v: "aula_dupla", label: "Aula em dupla" },
   { v: "aula_trio", label: "Aula em trio" },
   { v: "aula_quarteto", label: "Aula em quarteto" },
+  { v: "teste", label: "Teste" },
 ];
 
 type Booking = {
@@ -170,7 +171,7 @@ function Agenda() {
     playPop();
     setLoading(true);
     try {
-      const needsProf = type !== "quadra_livre";
+      const needsProf = !["quadra_livre", "teste"].includes(type);
       const created = await createBookingPixCheckout({
         bookingDate: format(selected, "yyyy-MM-dd"),
         hours: [...pendingHours],
@@ -318,7 +319,7 @@ function Agenda() {
             </p>
           </div>
 
-          {type !== "quadra_livre" && (
+          {!["quadra_livre", "teste"].includes(type) && (
             <div>
               <label className="mb-1 block text-xs font-medium text-muted-foreground">Professor</label>
               <select

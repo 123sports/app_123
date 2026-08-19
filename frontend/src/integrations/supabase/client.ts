@@ -106,6 +106,7 @@ const localPricing = [
   { id: 'local-price-double', booking_type: 'aula_dupla', price_cents: 8000, active: true },
   { id: 'local-price-trio', booking_type: 'aula_trio', price_cents: 6500, active: true },
   { id: 'local-price-quartet', booking_type: 'aula_quarteto', price_cents: 5500, active: true },
+  { id: 'local-price-test', booking_type: 'teste', price_cents: 100, active: true },
 ];
 
 function hasSupabaseConfig() {

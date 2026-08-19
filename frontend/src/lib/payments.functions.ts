@@ -15,6 +15,7 @@ const BOOKING_TYPES = [
   "aula_dupla",
   "aula_trio",
   "aula_quarteto",
+  "teste",
 ] as const;
 
 const createSchema = z.object({

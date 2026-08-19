@@ -24,6 +24,7 @@ export const Route = createFileRoute("/_authenticated/admin/financeiro")({
 const TYPE_LABEL: Record<string, string> = {
   quadra_livre: "Quadra livre", aula_individual: "Aula individual",
   aula_dupla: "Aula em dupla", aula_trio: "Aula em trio", aula_quarteto: "Aula em quarteto",
+  teste: "Teste",
 };
 const PAY_LABEL: Record<string, string> = { dinheiro: "Dinheiro", pix: "Pix", cartao: "Cartão" };
 
