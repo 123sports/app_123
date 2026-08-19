@@ -38,6 +38,23 @@ type HoldResult = {
   idempotency_key: string;
 };
 
+function sanitizeLogValue(value: unknown, depth = 0): unknown {
+  if (depth > 2) return "[truncated]";
+  if (value == null || ["string", "number", "boolean"].includes(typeof value)) return value;
+  if (Array.isArray(value)) return value.slice(0, 5).map((item) => sanitizeLogValue(item, depth + 1));
+  if (typeof value !== "object") return String(value);
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+    if (/token|authorization|secret|password|credential/i.test(key)) {
+      sanitized[key] = "[redacted]";
+    } else {
+      sanitized[key] = sanitizeLogValue(nestedValue, depth + 1);
+    }
+  }
+  return sanitized;
+}
+
 function safeMercadoPagoError(error: unknown) {
   if (!error || typeof error !== "object") {
     return { message: String(error || "unknown_error") };
@@ -53,7 +70,7 @@ function safeMercadoPagoError(error: unknown) {
     "cause",
     "code",
   ]) {
-    if (record[key] !== undefined) details[key] = record[key];
+    if (record[key] !== undefined) details[key] = sanitizeLogValue(record[key]);
   }
 
   if (error instanceof Error) {
@@ -62,6 +79,37 @@ function safeMercadoPagoError(error: unknown) {
   }
 
   return Object.keys(details).length > 0 ? details : { message: "unknown_error" };
+}
+
+async function releaseFailedCheckoutHold(input: {
+  orderId: string;
+  userId: string;
+  providerPaymentId?: string | null;
+  reason: string;
+}) {
+  if (input.providerPaymentId) {
+    try {
+      await cancelMercadoPagoPayment(input.providerPaymentId);
+    } catch (error) {
+      console.warn("[MercadoPago] Failed to cancel provider payment after checkout failure", {
+        orderId: input.orderId,
+        providerPaymentId: input.providerPaymentId,
+        error: safeMercadoPagoError(error),
+      });
+    }
+  }
+
+  const { error } = await (supabaseAdmin as any).rpc("cancel_booking_checkout", {
+    p_order_id: input.orderId,
+    p_user_id: input.userId,
+  });
+  if (error) {
+    console.error("[MercadoPago] Failed to release checkout hold after Pix failure", {
+      orderId: input.orderId,
+      reason: input.reason,
+      error: error.message,
+    });
+  }
 }
 
 function isValidCpf(cpf: string) {
@@ -205,8 +253,13 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
         orderId: hold.order_id,
         error: safeMercadoPagoError(error),
       });
+      await releaseFailedCheckoutHold({
+        orderId: hold.order_id,
+        userId: context.userId,
+        reason: "pix_creation_failed",
+      });
       throw new Error(
-        "Nao foi possivel gerar o Pix agora. A reserva temporaria expirara automaticamente.",
+        "Nao foi possivel gerar o Pix agora. O horario foi liberado para nova tentativa.",
       );
     }
 
@@ -215,6 +268,12 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
     const qrCode = transaction?.qr_code ?? "";
     const qrCodeBase64 = transaction?.qr_code_base64 ?? "";
     if (!providerPaymentId || !qrCode || !qrCodeBase64) {
+      await releaseFailedCheckoutHold({
+        orderId: hold.order_id,
+        userId: context.userId,
+        providerPaymentId,
+        reason: "incomplete_pix_payload",
+      });
       throw new Error("O Mercado Pago nao retornou os dados completos do Pix.");
     }
 
@@ -244,7 +303,13 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
         providerPaymentId,
         error: attemptError.message,
       });
-      throw new Error("Pix criado, mas a confirmacao local falhou. Aguarde a conciliacao.");
+      await releaseFailedCheckoutHold({
+        orderId: hold.order_id,
+        userId: context.userId,
+        providerPaymentId,
+        reason: "payment_attempt_persist_failed",
+      });
+      throw new Error("Pix criado, mas a confirmacao local falhou. O horario foi liberado.");
     }
 
     if (providerPayment.status === "approved") {
