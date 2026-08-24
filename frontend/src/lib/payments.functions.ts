@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   cancelMercadoPagoPayment,
   createMercadoPagoPix,
+  getMercadoPagoPayment,
   isMercadoPagoConfigured,
 } from "@/lib/mercado-pago.server";
 
@@ -138,6 +139,43 @@ function localPixPayload(orderId: string, amountCents: number) {
     `AMOUNT=${(amountCents / 100).toFixed(2)}`,
     "RECEIVER=ON TENNIS TESTE LOCAL",
   ].join("|");
+}
+
+function providerPaymentStatus(status?: string) {
+  switch (status) {
+    case "approved":
+      return "paid";
+    case "cancelled":
+      return "cancelled";
+    case "rejected":
+      return "failed";
+    case "refunded":
+    case "charged_back":
+      return "refunded";
+    default:
+      return "pending";
+  }
+}
+
+function cents(value?: number) {
+  return Math.round(Number(value ?? 0) * 100);
+}
+
+async function notifyPaymentReview(orderId: string, reason: string) {
+  const { data: admins } = await (supabaseAdmin as any)
+    .from("user_roles")
+    .select("user_id")
+    .eq("role", "admin");
+
+  if (!admins?.length) return;
+  await (supabaseAdmin as any).from("notifications").insert(
+    admins.map((admin: { user_id: string }) => ({
+      user_id: admin.user_id,
+      title: "Pagamento requer conferencia",
+      body: `Pedido ${orderId}: ${reason}`,
+      kind: "payment_review",
+    })),
+  );
 }
 
 export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
@@ -339,6 +377,108 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
       status: providerPayment.status === "approved" ? "paid" as const : "pending" as const,
       description: hold.description,
     };
+  });
+
+export const syncBookingPixCheckoutServer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => cancelSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    if (localPaymentSimulationAllowed()) return { status: "local" as const };
+    if (!isMercadoPagoConfigured()) {
+      throw new Error("Mercado Pago ainda nao foi configurado no servidor.");
+    }
+
+    const { data: order, error: orderError } = await (supabaseAdmin as any)
+      .from("checkout_orders")
+      .select("id, user_id, amount_cents, currency, status, expires_at")
+      .eq("id", data.orderId)
+      .maybeSingle();
+    if (orderError) throw new Error(orderError.message);
+    if (!order || order.user_id !== context.userId) {
+      throw new Error("Cobranca nao encontrada.");
+    }
+    if (order.status === "paid" || order.status === "paid_needs_review" || order.status === "refunded") {
+      return { status: order.status as string };
+    }
+
+    const { data: attempt, error: attemptError } = await (supabaseAdmin as any)
+      .from("payment_attempts")
+      .select("id, provider, provider_payment_id")
+      .eq("checkout_order_id", order.id)
+      .eq("provider", "mercado_pago")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (attemptError) throw new Error(attemptError.message);
+    if (!attempt?.provider_payment_id) return { status: order.status as string };
+
+    const payment = await getMercadoPagoPayment(attempt.provider_payment_id);
+    const mappedStatus = providerPaymentStatus(payment.status);
+    const externalReference = String(payment.external_reference ?? "");
+    const amountMatches = cents(payment.transaction_amount) === order.amount_cents;
+    const currencyMatches = payment.currency_id === order.currency;
+    const referenceMatches = externalReference === order.id
+      || String(payment.metadata?.checkout_order_id ?? "") === order.id;
+
+    const { error: updateAttemptError } = await (supabaseAdmin as any)
+      .from("payment_attempts")
+      .update({
+        status: mappedStatus,
+        paid_at: mappedStatus === "paid" ? payment.date_approved ?? new Date().toISOString() : null,
+        provider_payload: payment,
+      })
+      .eq("id", attempt.id);
+    if (updateAttemptError) throw new Error(updateAttemptError.message);
+
+    let processingError: string | null = null;
+    if (!amountMatches || !currencyMatches || !referenceMatches) {
+      processingError = "Divergencia de valor, moeda ou referencia externa.";
+    } else if (mappedStatus === "paid") {
+      const { count: activeBookings } = await (supabaseAdmin as any)
+        .from("bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("checkout_order_id", order.id)
+        .eq("status", "pendente")
+        .eq("payment_status", "pendente")
+        .gt("hold_expires_at", new Date().toISOString());
+
+      if (order.status !== "pending" || !activeBookings) {
+        processingError = "Pagamento aprovado sem reserva ativa; conferir manualmente.";
+      }
+    }
+
+    if (processingError) {
+      await (supabaseAdmin as any)
+        .from("checkout_orders")
+        .update({ status: "paid_needs_review" })
+        .eq("id", order.id)
+        .neq("status", "paid");
+      await notifyPaymentReview(order.id, processingError);
+      return { status: "paid_needs_review" as const };
+    }
+
+    if (mappedStatus === "paid") {
+      const { error: updateOrderError } = await (supabaseAdmin as any)
+        .from("checkout_orders")
+        .update({ status: "paid", paid_at: payment.date_approved ?? new Date().toISOString() })
+        .eq("id", order.id)
+        .eq("status", "pending");
+      if (updateOrderError) throw new Error(updateOrderError.message);
+    } else if (mappedStatus === "cancelled" || mappedStatus === "failed" || mappedStatus === "refunded") {
+      const orderPatch = mappedStatus === "refunded"
+        ? { status: "refunded", refunded_at: new Date().toISOString() }
+        : mappedStatus === "cancelled"
+          ? { status: "cancelled", cancelled_at: new Date().toISOString() }
+          : { status: "failed" };
+      const { error: updateOrderError } = await (supabaseAdmin as any)
+        .from("checkout_orders")
+        .update(orderPatch)
+        .eq("id", order.id)
+        .eq("status", "pending");
+      if (updateOrderError) throw new Error(updateOrderError.message);
+    }
+
+    return { status: mappedStatus };
   });
 
 export const approveLocalPixCheckoutServer = createServerFn({ method: "POST" })

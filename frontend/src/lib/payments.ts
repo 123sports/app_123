@@ -4,6 +4,7 @@ import {
   approveLocalPixCheckoutServer,
   cancelBookingPixCheckoutServer,
   createBookingPixCheckoutServer,
+  syncBookingPixCheckoutServer,
 } from "@/lib/payments.functions";
 
 export const LOCAL_PIX_HOLD_MINUTES = 30;
@@ -222,6 +223,14 @@ async function readLocalOrder(orderId: string) {
 }
 
 export async function getPixCheckout(orderId: string): Promise<PixCheckout> {
+  if (!isLocalSupabaseMode()) {
+    try {
+      await syncBookingPixCheckoutServer({ data: { orderId } });
+    } catch (error) {
+      console.warn("[Payments] Pix reconciliation failed", error);
+    }
+  }
+
   const { data: order, error: orderError } = await (supabase as any)
     .from("checkout_orders")
     .select("*")
