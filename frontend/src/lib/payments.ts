@@ -237,12 +237,12 @@ export async function getPixCheckout(orderId: string): Promise<PixCheckout> {
 
   const { data: order, error: orderError } = await (supabase as any)
     .from("checkout_orders")
-    .select("*")
+    .select("id, status, amount_cents, description, expires_at, metadata")
     .eq("id", orderId)
     .maybeSingle();
   const { data: payment, error: paymentError } = await (supabase as any)
     .from("payment_attempts")
-    .select("*")
+    .select("id, checkout_order_id, status, qr_code, qr_code_base64, expires_at")
     .eq("checkout_order_id", orderId)
     .order("created_at", { ascending: false })
     .limit(1)

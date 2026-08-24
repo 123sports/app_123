@@ -23,35 +23,26 @@ type CheckoutOrder = {
   created_at: string;
 };
 
-type PaymentAttempt = {
-  id: string;
-  checkout_order_id: string;
-  payment_method: string;
-  status: string;
-  provider_order_id: string | null;
-};
-
 function AdminPayments() {
   const [orders, setOrders] = useState<CheckoutOrder[]>([]);
-  const [attempts, setAttempts] = useState<PaymentAttempt[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "pending" | "paid" | "expired" | "cancelled">("all");
 
   const load = async () => {
     await cleanupExpiredLocalPixCheckouts();
-    const [{ data: orderRows }, { data: attemptRows }] = await Promise.all([
-      (supabase as any).from("checkout_orders").select("*").order("created_at", { ascending: false }).limit(300),
-      (supabase as any).from("payment_attempts").select("*").order("created_at", { ascending: false }).limit(300),
-    ]);
+    const { data: orderRows } = await (supabase as any)
+      .from("checkout_orders")
+      .select("id, user_id, kind, status, amount_cents, description, provider, expires_at, paid_at, created_at")
+      .order("created_at", { ascending: false })
+      .limit(300);
     const nextOrders = (orderRows ?? []) as CheckoutOrder[];
     setOrders(nextOrders);
-    setAttempts((attemptRows ?? []) as PaymentAttempt[]);
 
     const ids = [...new Set(nextOrders.map((order) => order.user_id))];
     if (ids.length) {
       const { data: profiles } = await (supabase as any)
-        .from("profiles")
+        .from("profiles_public")
         .select("id, full_name")
         .in("id", ids);
       setNames(Object.fromEntries((profiles ?? []).map((profile: any) => [profile.id, profile.full_name ?? "Aluno"])));
@@ -80,7 +71,6 @@ function AdminPayments() {
   const paid = orders.filter((order) => order.status === "paid");
   const pending = orders.filter((order) => order.status === "pending");
   const revenue = paid.reduce((sum, order) => sum + order.amount_cents, 0);
-  const attemptByOrder = Object.fromEntries(attempts.map((attempt) => [attempt.checkout_order_id, attempt]));
 
   return (
     <div className="stack-app animate-float-in">
@@ -133,7 +123,6 @@ function AdminPayments() {
               </thead>
               <tbody>
                 {visible.map((order) => {
-                  const attempt = attemptByOrder[order.id];
                   return (
                     <tr key={order.id} className="border-b border-border/60">
                       <td className="whitespace-nowrap p-3 type-data">
@@ -148,7 +137,7 @@ function AdminPayments() {
                       <td className="min-w-[280px] p-3 text-muted-foreground">{order.description}</td>
                       <td className="p-3">
                         <span className="inline-flex items-center gap-1.5">
-                          <QrCode className="h-4 w-4" /> {attempt?.payment_method === "pix" ? "Pix" : "—"}
+                          <QrCode className="h-4 w-4" /> Pix
                         </span>
                       </td>
                       <td className="p-3"><Status status={order.status} /></td>

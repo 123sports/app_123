@@ -34,3 +34,9 @@ services:
         sync: false
       - key: MERCADO_PAGO_WEBHOOK_SECRET
         sync: false
+      - key: MERCADO_PAGO_ENVIRONMENT
+        value: production
+      - key: ENABLE_TEST_BOOKING_TYPE
+        value: "false"
+      - key: VITE_ENABLE_TEST_BOOKING_TYPE
+        value: "false"

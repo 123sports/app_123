@@ -5,7 +5,7 @@ import MercadoPagoConfig, {
 } from "mercadopago";
 
 const MERCADO_PAGO_API_TIMEOUT_MS = 12_000;
-const MERCADO_PAGO_WEBHOOK_TOLERANCE_SECONDS = 60 * 60;
+const MERCADO_PAGO_WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
 
 function requiredServerEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -13,9 +13,37 @@ function requiredServerEnv(name: string): string {
   return value;
 }
 
+function mercadoPagoEnvironment() {
+  const environment = process.env.MERCADO_PAGO_ENVIRONMENT?.trim() || "production";
+  if (environment !== "production" && environment !== "test") {
+    throw new Error("MERCADO_PAGO_ENVIRONMENT deve ser production ou test.");
+  }
+  return environment;
+}
+
+function mercadoPagoAccessToken() {
+  const token = requiredServerEnv("MERCADO_PAGO_ACCESS_TOKEN");
+  const environment = mercadoPagoEnvironment();
+  if (environment === "production" && !token.startsWith("APP_USR-")) {
+    throw new Error("Use um Access Token de producao neste ambiente.");
+  }
+  if (environment === "test" && !token.startsWith("TEST-")) {
+    throw new Error("Use um Access Token de teste neste ambiente.");
+  }
+  return token;
+}
+
+function assertPaymentEnvironment(liveMode?: boolean) {
+  if (typeof liveMode !== "boolean") return;
+  const expectedLiveMode = mercadoPagoEnvironment() === "production";
+  if (liveMode !== expectedLiveMode) {
+    throw new Error("O pagamento pertence a um ambiente diferente do configurado.");
+  }
+}
+
 function paymentClient() {
   const config = new MercadoPagoConfig({
-    accessToken: requiredServerEnv("MERCADO_PAGO_ACCESS_TOKEN"),
+    accessToken: mercadoPagoAccessToken(),
     options: { timeout: MERCADO_PAGO_API_TIMEOUT_MS },
   });
   return new Payment(config);
@@ -80,7 +108,7 @@ export async function createMercadoPagoPix(input: {
 }) {
   const name = splitName(input.payer.fullName);
   const cpf = normalizedCpf(input.payer.cpf);
-  return paymentClient().create({
+  const payment = await paymentClient().create({
     body: {
       transaction_amount: input.amountCents / 100,
       description: input.description,
@@ -102,10 +130,14 @@ export async function createMercadoPagoPix(input: {
       idempotencyKey: input.idempotencyKey,
     },
   });
+  assertPaymentEnvironment(payment.live_mode);
+  return payment;
 }
 
 export async function getMercadoPagoPayment(paymentId: string) {
-  return paymentClient().get({ id: paymentId });
+  const payment = await paymentClient().get({ id: paymentId });
+  assertPaymentEnvironment(payment.live_mode);
+  return payment;
 }
 
 export async function cancelMercadoPagoPayment(paymentId: string) {

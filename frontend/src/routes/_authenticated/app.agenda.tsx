@@ -38,7 +38,9 @@ const TYPES = [
   { v: "aula_dupla", label: "Aula em dupla" },
   { v: "aula_trio", label: "Aula em trio" },
   { v: "aula_quarteto", label: "Aula em quarteto" },
-  { v: "teste", label: "Teste" },
+  ...(import.meta.env.VITE_ENABLE_TEST_BOOKING_TYPE === "true"
+    ? [{ v: "teste", label: "Teste" }]
+    : []),
 ];
 
 type Booking = {

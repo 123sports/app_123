@@ -3,8 +3,15 @@ import { z } from "zod";
 import QRCode from "qrcode";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { hasCompleteActiveBookingHold } from "@/lib/booking-checkout-validation.server";
 import { assertBookingSchedule, isValidBookingDate } from "@/lib/booking-schedule";
 import { flagPaymentForReview } from "@/lib/payment-review.server";
+import {
+  decidePaymentTransition,
+  mercadoPagoPaymentStatus,
+  safeMercadoPagoPayload,
+  type CheckoutOrderStatus,
+} from "@/lib/payment-security";
 import {
   cancelMercadoPagoPayment,
   createMercadoPagoPix,
@@ -144,22 +151,6 @@ function localPixPayload(orderId: string, amountCents: number) {
   ].join("|");
 }
 
-function providerPaymentStatus(status?: string) {
-  switch (status) {
-    case "approved":
-      return "paid";
-    case "cancelled":
-      return "cancelled";
-    case "rejected":
-      return "failed";
-    case "refunded":
-    case "charged_back":
-      return "refunded";
-    default:
-      return "pending";
-  }
-}
-
 function cents(value?: number) {
   return Math.round(Number(value ?? 0) * 100);
 }
@@ -168,6 +159,10 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => createSchema.parse(data))
   .handler(async ({ data, context }) => {
+    if (data.bookingType === "teste" && process.env.ENABLE_TEST_BOOKING_TYPE !== "true") {
+      throw new Error("O tipo de reserva de teste nao esta habilitado neste ambiente.");
+    }
+
     const localSimulation = localPaymentSimulationAllowed();
     if (!localSimulation && !isMercadoPagoConfigured()) {
       throw new Error("Mercado Pago ainda nao foi configurado no servidor.");
@@ -305,6 +300,10 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
     }
 
     const paymentAttemptId = crypto.randomUUID();
+    const initialPaymentStatus = mercadoPagoPaymentStatus(
+      providerPayment.status,
+      providerPayment.status_detail,
+    );
     const { error: attemptError } = await (supabaseAdmin as any).from("payment_attempts").insert({
       id: paymentAttemptId,
       checkout_order_id: hold.order_id,
@@ -312,14 +311,14 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
       provider_order_id: null,
       provider_payment_id: providerPaymentId,
       payment_method: "pix",
-      status: providerPayment.status === "approved" ? "paid" : "pending",
+      status: initialPaymentStatus,
       amount_cents: hold.amount_cents,
       qr_code: qrCode,
       qr_code_base64: qrCodeBase64,
       ticket_url: transaction?.ticket_url ?? null,
       expires_at: providerPayment.date_of_expiration ?? hold.expires_at,
       paid_at: providerPayment.date_approved ?? null,
-      provider_payload: providerPayment,
+      provider_payload: safeMercadoPagoPayload(providerPayment),
     });
 
     if (attemptError) {
@@ -337,7 +336,7 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
       throw new Error("Pix criado, mas a confirmacao local falhou. O horario foi liberado.");
     }
 
-    if (providerPayment.status === "approved") {
+    if (initialPaymentStatus === "paid") {
       const { error: paidOrderError } = await (supabaseAdmin as any)
         .from("checkout_orders")
         .update({
@@ -364,7 +363,7 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
       pixCopyPaste: qrCode,
       qrCodeDataUrl: `data:image/png;base64,${qrCodeBase64}`,
       expiresAt: providerPayment.date_of_expiration ?? hold.expires_at,
-      status: providerPayment.status === "approved" ? ("paid" as const) : ("pending" as const),
+      status: initialPaymentStatus === "paid" ? ("paid" as const) : ("pending" as const),
       description: hold.description,
     };
   });
@@ -380,7 +379,7 @@ export const syncBookingPixCheckoutServer = createServerFn({ method: "POST" })
 
     const { data: order, error: orderError } = await (supabaseAdmin as any)
       .from("checkout_orders")
-      .select("id, user_id, amount_cents, currency, status, expires_at")
+      .select("id, user_id, kind, amount_cents, currency, status, expires_at")
       .eq("id", data.orderId)
       .maybeSingle();
     if (orderError) throw new Error(orderError.message);
@@ -407,7 +406,7 @@ export const syncBookingPixCheckoutServer = createServerFn({ method: "POST" })
     if (!attempt?.provider_payment_id) return { status: order.status as string };
 
     const payment = await getMercadoPagoPayment(attempt.provider_payment_id);
-    const mappedStatus = providerPaymentStatus(payment.status);
+    const mappedStatus = mercadoPagoPaymentStatus(payment.status, payment.status_detail);
     const externalReference = String(payment.external_reference ?? "");
     const amountMatches = cents(payment.transaction_amount) === order.amount_cents;
     const currencyMatches = payment.currency_id === order.currency;
@@ -421,7 +420,7 @@ export const syncBookingPixCheckoutServer = createServerFn({ method: "POST" })
         status: mappedStatus,
         paid_at:
           mappedStatus === "paid" ? (payment.date_approved ?? new Date().toISOString()) : null,
-        provider_payload: payment,
+        provider_payload: safeMercadoPagoPayload(payment),
       })
       .eq("id", attempt.id);
     if (updateAttemptError) throw new Error(updateAttemptError.message);
@@ -429,48 +428,44 @@ export const syncBookingPixCheckoutServer = createServerFn({ method: "POST" })
     let processingError: string | null = null;
     if (!amountMatches || !currencyMatches || !referenceMatches) {
       processingError = "Divergencia de valor, moeda ou referencia externa.";
-    } else if (mappedStatus === "paid") {
-      const { count: activeBookings } = await (supabaseAdmin as any)
-        .from("bookings")
-        .select("id", { count: "exact", head: true })
-        .eq("checkout_order_id", order.id)
-        .eq("status", "pendente")
-        .eq("payment_status", "pendente")
-        .gt("hold_expires_at", new Date().toISOString());
-
-      if (order.status !== "pending" || !activeBookings) {
-        processingError = "Pagamento aprovado sem reserva ativa; conferir manualmente.";
-      }
+    } else if (
+      mappedStatus === "paid" &&
+      order.status === "pending" &&
+      !(await hasCompleteActiveBookingHold(order))
+    ) {
+      processingError = "Pagamento aprovado sem todas as reservas ativas; conferir manualmente.";
     }
+
+    const decision = decidePaymentTransition(
+      order.status as CheckoutOrderStatus,
+      mappedStatus,
+    );
+    processingError ??= decision.reviewReason;
 
     if (processingError) {
       const reviewStatus = await flagPaymentForReview(order.id, processingError);
       return { status: reviewStatus };
     }
 
-    if (mappedStatus === "paid") {
+    if (decision.nextOrderStatus === "paid") {
       const { error: updateOrderError } = await (supabaseAdmin as any)
         .from("checkout_orders")
         .update({ status: "paid", paid_at: payment.date_approved ?? new Date().toISOString() })
         .eq("id", order.id)
         .eq("status", "pending");
       if (updateOrderError) throw new Error(updateOrderError.message);
-    } else if (
-      mappedStatus === "cancelled" ||
-      mappedStatus === "failed" ||
-      mappedStatus === "refunded"
-    ) {
+    } else if (decision.nextOrderStatus) {
       const orderPatch =
-        mappedStatus === "refunded"
+        decision.nextOrderStatus === "refunded"
           ? { status: "refunded", refunded_at: new Date().toISOString() }
-          : mappedStatus === "cancelled"
+          : decision.nextOrderStatus === "cancelled"
             ? { status: "cancelled", cancelled_at: new Date().toISOString() }
-            : { status: "failed" };
+            : { status: decision.nextOrderStatus };
       const { error: updateOrderError } = await (supabaseAdmin as any)
         .from("checkout_orders")
         .update(orderPatch)
         .eq("id", order.id)
-        .eq("status", "pending");
+        .eq("status", order.status);
       if (updateOrderError) throw new Error(updateOrderError.message);
     }
 

@@ -5,7 +5,6 @@ const REVIEWABLE_ORDER_STATUSES = [
   "expired",
   "cancelled",
   "failed",
-  "refunded",
 ];
 
 function friendlyReviewMessage(orderId: string, reason: string) {
@@ -69,13 +68,6 @@ export async function flagPaymentForReview(orderId: string, reason: string) {
     .maybeSingle();
   if (flagError) throw flagError;
 
-  // Only one alert per order and administrator is kept. A retry can recreate
-  // a notification that failed after the order status was already changed.
-  if (flaggedOrder) {
-    await notifyAdmins(orderId, reason);
-    return "paid_needs_review" as const;
-  }
-
   const { data: currentOrder, error: currentError } = await (supabaseAdmin as any)
     .from("checkout_orders")
     .select("status")
@@ -83,9 +75,11 @@ export async function flagPaymentForReview(orderId: string, reason: string) {
     .maybeSingle();
   if (currentError) throw currentError;
 
-  if (currentOrder?.status === "paid_needs_review") {
+  // Keep paid/refunded financial states immutable while still alerting the
+  // team about a reconciliation inconsistency. notifyAdmins is idempotent.
+  if (flaggedOrder || currentOrder) {
     await notifyAdmins(orderId, reason);
   }
 
-  return (currentOrder?.status ?? "paid_needs_review") as string;
+  return (flaggedOrder?.status ?? currentOrder?.status ?? "paid_needs_review") as string;
 }

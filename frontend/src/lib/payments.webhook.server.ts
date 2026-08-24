@@ -1,10 +1,18 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { hasCompleteActiveBookingHold } from "@/lib/booking-checkout-validation.server";
 import {
   getMercadoPagoPayment,
   InvalidWebhookSignatureError,
   validateMercadoPagoWebhook,
 } from "@/lib/mercado-pago.server";
 import { flagPaymentForReview } from "@/lib/payment-review.server";
+import {
+  decidePaymentTransition,
+  mercadoPagoPaymentStatus,
+  safeMercadoPagoPayload,
+  type CheckoutOrderStatus,
+  type ReconciledPaymentStatus,
+} from "@/lib/payment-security";
 
 type WebhookBody = {
   action?: string;
@@ -49,24 +57,56 @@ async function readLimitedBody(request: Request) {
   return new TextDecoder().decode(body);
 }
 
-function paymentStatus(status?: string) {
+function cents(value?: number) {
+  return Math.round(Number(value ?? 0) * 100);
+}
+
+function orderPatch(status: CheckoutOrderStatus, paidAt?: string | null) {
   switch (status) {
-    case "approved":
-      return "paid";
-    case "cancelled":
-      return "cancelled";
-    case "rejected":
-      return "failed";
+    case "paid":
+      return { status, paid_at: paidAt ?? new Date().toISOString() };
     case "refunded":
-    case "charged_back":
-      return "refunded";
+      return { status, refunded_at: new Date().toISOString() };
+    case "cancelled":
+      return { status, cancelled_at: new Date().toISOString() };
     default:
-      return "pending";
+      return { status };
   }
 }
 
-function cents(value?: number) {
-  return Math.round(Number(value ?? 0) * 100);
+async function applyVerifiedOrderTransition(input: {
+  orderId: string;
+  observedStatus: CheckoutOrderStatus;
+  paymentStatus: ReconciledPaymentStatus;
+  paidAt?: string | null;
+}) {
+  let currentStatus = input.observedStatus;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const decision = decidePaymentTransition(currentStatus, input.paymentStatus);
+    if (decision.reviewReason || !decision.nextOrderStatus) return decision.reviewReason;
+
+    const { data: updated, error: updateError } = await (supabaseAdmin as any)
+      .from("checkout_orders")
+      .update(orderPatch(decision.nextOrderStatus, input.paidAt))
+      .eq("id", input.orderId)
+      .eq("status", currentStatus)
+      .select("status")
+      .maybeSingle();
+    if (updateError) throw updateError;
+    if (updated) return null;
+
+    const { data: current, error: currentError } = await (supabaseAdmin as any)
+      .from("checkout_orders")
+      .select("status")
+      .eq("id", input.orderId)
+      .maybeSingle();
+    if (currentError) throw currentError;
+    if (!current) return "Pedido deixou de existir durante a conciliacao.";
+    currentStatus = current.status as CheckoutOrderStatus;
+  }
+
+  throw new Error("Concurrent payment reconciliation did not converge.");
 }
 
 export async function handleMercadoPagoWebhook(request: Request) {
@@ -92,7 +132,17 @@ export async function handleMercadoPagoWebhook(request: Request) {
     ?? body.data?.id
     ?? "",
   ).trim();
-  const requestId = request.headers.get("x-request-id");
+  const requestId = request.headers.get("x-request-id")?.trim() ?? null;
+
+  if (
+    !requestId ||
+    requestId.length > 200 ||
+    !dataId ||
+    dataId.length > 32 ||
+    !/^\d+$/.test(dataId)
+  ) {
+    return new Response("Invalid webhook identifiers", { status: 400 });
+  }
 
   try {
     validateMercadoPagoWebhook({
@@ -114,9 +164,6 @@ export async function handleMercadoPagoWebhook(request: Request) {
     throw error;
   }
 
-  if (!requestId || !dataId) {
-    return new Response("Missing webhook identifiers", { status: 400 });
-  }
   if (body.type && body.type !== "payment") {
     return new Response(null, { status: 200 });
   }
@@ -141,7 +188,7 @@ export async function handleMercadoPagoWebhook(request: Request) {
 
   const { data: order, error: orderError } = await (supabaseAdmin as any)
     .from("checkout_orders")
-    .select("id, amount_cents, currency, status, expires_at")
+    .select("id, kind, amount_cents, currency, status, expires_at")
     .eq("id", orderId)
     .maybeSingle();
   if (orderError) throw orderError;
@@ -164,7 +211,7 @@ export async function handleMercadoPagoWebhook(request: Request) {
     .single();
   if (eventError) throw eventError;
 
-  const mappedStatus = paymentStatus(payment.status);
+  const mappedStatus = mercadoPagoPaymentStatus(payment.status, payment.status_detail);
   const amountMatches = cents(payment.transaction_amount) === order.amount_cents;
   const currencyMatches = payment.currency_id === order.currency;
   const referenceMatches = externalReference === order.id;
@@ -192,7 +239,7 @@ export async function handleMercadoPagoWebhook(request: Request) {
         ticket_url: transaction?.ticket_url ?? null,
         expires_at: payment.date_of_expiration ?? order.expires_at,
         paid_at: payment.date_approved ?? null,
-        provider_payload: payment,
+        provider_payload: safeMercadoPagoPayload(payment),
       })
       .select("id")
       .single();
@@ -204,7 +251,7 @@ export async function handleMercadoPagoWebhook(request: Request) {
       .update({
         status: mappedStatus,
         paid_at: mappedStatus === "paid" ? payment.date_approved ?? new Date().toISOString() : null,
-        provider_payload: payment,
+        provider_payload: safeMercadoPagoPayload(payment),
       })
       .eq("id", attempt.id);
     if (updateAttemptError) throw updateAttemptError;
@@ -213,52 +260,25 @@ export async function handleMercadoPagoWebhook(request: Request) {
   let processingError: string | null = null;
   if (!amountMatches || !currencyMatches || !referenceMatches) {
     processingError = "Divergencia de valor, moeda ou referencia externa.";
-  } else if (mappedStatus === "paid") {
-    const { count: activeBookings } = await (supabaseAdmin as any)
-      .from("bookings")
-      .select("id", { count: "exact", head: true })
-      .eq("checkout_order_id", order.id)
-      .eq("status", "pendente")
-      .eq("payment_status", "pendente")
-      .gt("hold_expires_at", new Date().toISOString());
-
-    if (order.status !== "pending" || !activeBookings) {
-      processingError = "Pagamento aprovado sem reserva ativa; conferir manualmente.";
-    }
-  }
-
-  if (processingError) {
-    const reviewStatus = await flagPaymentForReview(order.id, processingError);
-    if (reviewStatus === "paid") processingError = null;
+  } else if (
+    mappedStatus === "paid" &&
+    order.status === "pending" &&
+    !(await hasCompleteActiveBookingHold(order))
+  ) {
+    processingError = "Pagamento aprovado sem todas as reservas ativas; conferir manualmente.";
   }
 
   if (!processingError) {
-    const orderPatch = mappedStatus === "paid"
-      ? { status: "paid", paid_at: payment.date_approved ?? new Date().toISOString() }
-      : mappedStatus === "refunded"
-        ? { status: "refunded", refunded_at: new Date().toISOString() }
-        : mappedStatus === "cancelled"
-          ? { status: "cancelled", cancelled_at: new Date().toISOString() }
-          : mappedStatus === "failed"
-            ? { status: "failed" }
-            : { status: "pending" };
+    processingError = await applyVerifiedOrderTransition({
+      orderId: order.id,
+      observedStatus: order.status as CheckoutOrderStatus,
+      paymentStatus: mappedStatus,
+      paidAt: payment.date_approved,
+    });
+  }
 
-    const { error: updateOrderError } = await (supabaseAdmin as any)
-      .from("checkout_orders")
-      .update(orderPatch)
-      .eq("id", order.id);
-    if (updateOrderError) throw updateOrderError;
-
-    if (mappedStatus === "cancelled" || mappedStatus === "failed") {
-      await (supabaseAdmin as any)
-        .from("bookings")
-        .update({
-          status: "cancelada",
-          payment_status: mappedStatus === "cancelled" ? "cancelado" : "falhou",
-        })
-        .eq("checkout_order_id", order.id)
-        .eq("payment_status", "pendente");
-    }
+  if (processingError) {
+    await flagPaymentForReview(order.id, processingError);
   }
 
   await (supabaseAdmin as any)
