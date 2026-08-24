@@ -61,6 +61,14 @@ function normalizedCpf(value?: string | null) {
   return digits.length === 11 ? digits : undefined;
 }
 
+function mercadoPagoDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Data de expiracao do Pix invalida.");
+  }
+  return date.toISOString().replace("Z", "+00:00");
+}
+
 export async function createMercadoPagoPix(input: {
   orderId: string;
   idempotencyKey: string;
@@ -77,7 +85,7 @@ export async function createMercadoPagoPix(input: {
       description: input.description,
       payment_method_id: "pix",
       external_reference: input.orderId,
-      date_of_expiration: input.expiresAt,
+      date_of_expiration: mercadoPagoDate(input.expiresAt),
       notification_url: webhookUrl(),
       payer: {
         email: input.payer.email,
