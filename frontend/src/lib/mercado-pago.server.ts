@@ -5,6 +5,7 @@ import MercadoPagoConfig, {
 } from "mercadopago";
 
 const MERCADO_PAGO_API_TIMEOUT_MS = 12_000;
+const MERCADO_PAGO_WEBHOOK_TOLERANCE_SECONDS = 60 * 60;
 
 function requiredServerEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -121,7 +122,7 @@ export function validateMercadoPagoWebhook(input: {
     xRequestId: input.requestId,
     dataId: input.dataId,
     secret: requiredServerEnv("MERCADO_PAGO_WEBHOOK_SECRET"),
-    toleranceSeconds: 300,
+    toleranceSeconds: MERCADO_PAGO_WEBHOOK_TOLERANCE_SECONDS,
   });
 }
 

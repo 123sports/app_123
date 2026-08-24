@@ -13,6 +13,15 @@ type WebhookBody = {
 
 const MAX_WEBHOOK_BYTES = 65_536;
 
+function signatureAgeSeconds(signature: string | null) {
+  const timestamp = signature
+    ?.split(",")
+    .map((part) => part.trim().split("="))
+    .find(([key]) => key === "ts")?.[1];
+  if (!timestamp || !/^\d+$/.test(timestamp)) return null;
+  return Math.round(Date.now() / 1000) - Number(timestamp);
+}
+
 async function readLimitedBody(request: Request) {
   if (!request.body) return "";
   const reader = request.body.getReader();
@@ -111,6 +120,9 @@ export async function handleMercadoPagoWebhook(request: Request) {
     if (error instanceof InvalidWebhookSignatureError) {
       console.warn("[MercadoPago] Rejected webhook signature", {
         requestId,
+        dataId: dataId || null,
+        eventType: body.type ?? body.action ?? null,
+        signatureAgeSeconds: signatureAgeSeconds(request.headers.get("x-signature")),
         reason: error.reason,
       });
       return new Response("Invalid signature", { status: 401 });
