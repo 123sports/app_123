@@ -65,8 +65,14 @@ export function NotificationsBell() {
           (payload) => {
             const n = payload.new as Notif;
             setItems((prev) => [n, ...prev].slice(0, 20));
-            if (n.kind === "booking_confirmed" || n.kind === "payment_paid") {
+            if (
+              n.kind === "booking_confirmed" ||
+              n.kind === "payment_paid" ||
+              n.kind === "booking_rescheduled"
+            ) {
               toast.success(n.title, { description: n.body ?? undefined });
+            } else if (n.kind === "payment_review") {
+              toast.warning(n.title, { description: n.body ?? undefined });
             } else {
               toast(n.title, { description: n.body ?? undefined });
             }

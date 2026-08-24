@@ -11,6 +11,36 @@ const npmCommand = "npm";
 const useShell = process.platform === "win32";
 const useSupabase = process.argv.includes("--supabase");
 
+function previewEnvironment() {
+  const env = {
+    ...process.env,
+    VITE_ENABLE_LOCAL_MODE: useSupabase ? "false" : "true",
+  };
+
+  if (!useSupabase) {
+    for (const key of [
+      "SUPABASE_URL",
+      "SUPABASE_PUBLISHABLE_KEY",
+      "SUPABASE_SECRET_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "VITE_SUPABASE_URL",
+      "VITE_SUPABASE_PUBLISHABLE_KEY",
+      "VITE_SUPABASE_PROJECT_ID",
+      "MERCADO_PAGO_ACCESS_TOKEN",
+      "MERCADO_PAGO_WEBHOOK_SECRET",
+    ]) {
+      delete env[key];
+    }
+    env.PAYMENT_PROVIDER = "local";
+    env.VITE_PAYMENT_PROVIDER = "local";
+    env.ALLOW_LOCAL_PAYMENT_SIMULATION = "true";
+  }
+
+  return env;
+}
+
+const previewEnv = previewEnvironment();
+
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -33,10 +63,7 @@ function run(command, args, options = {}) {
 
 await run(npmCommand, ["run", "build"], {
   shell: useShell,
-  env: {
-    ...process.env,
-    VITE_ENABLE_LOCAL_MODE: useSupabase ? "false" : "true",
-  },
+  env: previewEnv,
 });
 
 console.log("");
@@ -48,7 +75,7 @@ const server = spawn(process.execPath, [".output/server/index.mjs"], {
   stdio: "inherit",
   shell: false,
   env: {
-    ...process.env,
+    ...previewEnv,
     HOST: host,
     PORT: port,
   },

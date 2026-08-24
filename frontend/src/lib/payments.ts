@@ -1,5 +1,6 @@
 import QRCode from "qrcode";
 import { isLocalSupabaseMode, supabase } from "@/integrations/supabase/client";
+import { assertBookingSchedule } from "@/lib/booking-schedule";
 import {
   approveLocalPixCheckoutServer,
   cancelBookingPixCheckoutServer,
@@ -80,6 +81,7 @@ export async function createBookingPixCheckout(input: CreateBookingPixInput): Pr
 
   const hours = [...new Set(input.hours)].sort((a, b) => a - b);
   if (!hours.length) throw new Error("Selecione pelo menos um horário.");
+  for (const hour of hours) assertBookingSchedule(input.bookingDate, hour);
 
   const { data: occupied } = await (supabase as any)
     .from("bookings_occupancy")
@@ -189,7 +191,9 @@ export async function createBookingPixCheckout(input: CreateBookingPixInput): Pr
     if (bookingError) throw bookingError;
     const { error: itemError } = await (supabase as any).from("checkout_items").insert(items);
     if (itemError) throw itemError;
-    const { error: paymentError } = await (supabase as any).from("payment_attempts").insert(payment);
+    const { error: paymentError } = await (supabase as any)
+      .from("payment_attempts")
+      .insert(payment);
     if (paymentError) throw paymentError;
   } catch (error) {
     await (supabase as any).from("payment_attempts").delete().eq("checkout_order_id", orderId);
@@ -248,13 +252,14 @@ export async function getPixCheckout(orderId: string): Promise<PixCheckout> {
     throw new Error("Cobrança Pix não encontrada.");
   }
 
-  const status = order.status === "paid"
-    ? "paid"
-    : order.status === "cancelled"
-      ? "cancelled"
-      : order.status === "expired" || new Date(order.expires_at).getTime() <= Date.now()
-        ? "expired"
-        : "pending";
+  const status =
+    order.status === "paid"
+      ? "paid"
+      : order.status === "cancelled"
+        ? "cancelled"
+        : order.status === "expired" || new Date(order.expires_at).getTime() <= Date.now()
+          ? "expired"
+          : "pending";
 
   return {
     orderId: order.id,
@@ -357,8 +362,8 @@ export async function approveLocalPixCheckout(checkout: PixCheckout): Promise<Pi
     .select("id, status, payment_status")
     .eq("checkout_order_id", checkout.orderId);
   if (
-    (linkedBookings ?? []).length !== checkout.bookingIds.length
-    || (linkedBookings ?? []).some((booking: any) => booking.status === "cancelada")
+    (linkedBookings ?? []).length !== checkout.bookingIds.length ||
+    (linkedBookings ?? []).some((booking: any) => booking.status === "cancelada")
   ) {
     throw new Error("A reserva vinculada a este Pix não está mais disponível.");
   }
@@ -384,26 +389,15 @@ export async function approveLocalPixCheckout(checkout: PixCheckout): Promise<Pi
     .in("id", checkout.bookingIds);
 
   const { data: auth } = await supabase.auth.getUser();
-  const professorId = order.metadata?.professor_id as string | null;
-  const { data: adminRoles } = await (supabase as any)
-    .from("user_roles")
-    .select("user_id")
-    .eq("role", "admin");
-  const recipients = new Set<string>([
-    ...(professorId ? [professorId] : []),
-    ...((adminRoles ?? []).map((role: any) => role.user_id)),
-  ]);
-  if (!recipients.size && auth.user) recipients.add(auth.user.id);
-
-  await (supabase as any).from("notifications").insert(
-    [...recipients].map((userId) => ({
-      user_id: userId,
-      title: "Pagamento Pix aprovado",
-      body: `${order.description} · R$ ${(order.amount_cents / 100).toFixed(2).replace(".", ",")}`,
-      kind: "payment_paid",
+  if (auth.user) {
+    await (supabase as any).from("notifications").insert({
+      user_id: auth.user.id,
+      title: "Reserva confirmada",
+      body: `Tudo certo! O pagamento foi aprovado e sua reserva está confirmada: ${order.description}.`,
+      kind: "booking_confirmed",
       related_booking_id: checkout.bookingIds[0] ?? null,
-    })),
-  );
+    });
+  }
 
   return { ...checkout, status: "paid" };
 }

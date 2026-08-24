@@ -158,6 +158,7 @@ function Status({ status }: { status: string }) {
     cancelled: "bg-muted text-muted-foreground",
     failed: "bg-destructive/15 text-destructive",
     refunded: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
+    paid_needs_review: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
   };
   const labels: Record<string, string> = {
     paid: "Pago",
@@ -166,6 +167,7 @@ function Status({ status }: { status: string }) {
     cancelled: "Cancelado",
     failed: "Falhou",
     refunded: "Estornado",
+    paid_needs_review: "Em análise",
   };
   return (
     <span className={`px-2 py-1 text-xs font-medium ${styles[status] ?? "bg-muted text-muted-foreground"}`}>

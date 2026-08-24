@@ -31,6 +31,7 @@ const LOCAL_BOOKINGS_KEY = 'on_tennis_local_bookings';
 const LOCAL_CHECKOUT_ORDERS_KEY = 'on_tennis_local_checkout_orders';
 const LOCAL_CHECKOUT_ITEMS_KEY = 'on_tennis_local_checkout_items';
 const LOCAL_PAYMENT_ATTEMPTS_KEY = 'on_tennis_local_payment_attempts';
+const LOCAL_BOOKING_RESCHEDULES_KEY = 'on_tennis_local_booking_reschedules';
 const LOCAL_NOTIFICATIONS_KEY = 'on_tennis_local_notifications';
 const LOCAL_STAFF_INVITES_KEY = 'on_tennis_local_staff_invites';
 
@@ -120,6 +121,7 @@ function canUseLocalSupabaseMode() {
 }
 
 export function isLocalSupabaseMode() {
+  if (import.meta.env.VITE_ENABLE_LOCAL_MODE === 'true') return true;
   return !hasSupabaseConfig() && canUseLocalSupabaseMode();
 }
 
@@ -191,6 +193,8 @@ function localStorageKeyForTable(table: string) {
       return LOCAL_CHECKOUT_ITEMS_KEY;
     case 'payment_attempts':
       return LOCAL_PAYMENT_ATTEMPTS_KEY;
+    case 'booking_reschedules':
+      return LOCAL_BOOKING_RESCHEDULES_KEY;
     case 'notifications':
       return LOCAL_NOTIFICATIONS_KEY;
     case 'staff_invites':
@@ -214,6 +218,7 @@ function normalizeLocalRow(table: string, row: Record<string, any>) {
     checkout_orders: 'local-checkout',
     checkout_items: 'local-checkout-item',
     payment_attempts: 'local-payment',
+    booking_reschedules: 'local-reschedule',
     notifications: 'local-notification',
     staff_invites: 'local-staff-invite',
   };
@@ -264,6 +269,8 @@ function localRowsFor(table: string): any[] {
       return readLocalCollection(LOCAL_CHECKOUT_ITEMS_KEY);
     case 'payment_attempts':
       return readLocalCollection(LOCAL_PAYMENT_ATTEMPTS_KEY);
+    case 'booking_reschedules':
+      return readLocalCollection(LOCAL_BOOKING_RESCHEDULES_KEY);
     case 'notifications':
       return readLocalCollection(LOCAL_NOTIFICATIONS_KEY);
     case 'staff_invites':
@@ -569,6 +576,10 @@ function createLocalSupabaseClient() {
 }
 
 function createSupabaseClient() {
+  if (import.meta.env.VITE_ENABLE_LOCAL_MODE === 'true') {
+    return createLocalSupabaseClient() as unknown as ReturnType<typeof createClient<Database>>;
+  }
+
   // Use import.meta.env for client-side (Vite build-time replacement)
   // Fall back to process.env for SSR (server-side rendering)
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;

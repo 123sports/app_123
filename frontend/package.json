@@ -15,6 +15,10 @@
     "preview:supabase": "node scripts/preview-local.mjs --supabase",
     "preview:vite": "vite preview",
     "start": "node .output/server/index.mjs",
+    "test": "node --test --experimental-strip-types tests/booking-schedule.test.ts",
+    "test:security": "node tests/reschedule-rpc-security.mjs",
+    "test:notifications": "node tests/payment-notifications-security.mjs",
+    "test:e2e:reschedule": "node tests/agenda-reschedule.e2e.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

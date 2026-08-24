@@ -79,6 +79,72 @@ export type Database = {
           },
         ]
       }
+      booking_reschedules: {
+        Row: {
+          amount_cents: number
+          booking_id: string
+          booking_type: Database["public"]["Enums"]["booking_type"]
+          changed_by: string | null
+          checkout_order_id: string
+          created_at: string
+          id: string
+          new_booking_date: string
+          new_start_hour: number
+          old_booking_date: string
+          old_start_hour: number
+          professor_id: string | null
+          reason: string
+          user_id: string
+        }
+        Insert: {
+          amount_cents: number
+          booking_id: string
+          booking_type: Database["public"]["Enums"]["booking_type"]
+          changed_by?: string | null
+          checkout_order_id: string
+          created_at?: string
+          id?: string
+          new_booking_date: string
+          new_start_hour: number
+          old_booking_date: string
+          old_start_hour: number
+          professor_id?: string | null
+          reason?: string
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number
+          booking_id?: string
+          booking_type?: Database["public"]["Enums"]["booking_type"]
+          changed_by?: string | null
+          checkout_order_id?: string
+          created_at?: string
+          id?: string
+          new_booking_date?: string
+          new_start_hour?: number
+          old_booking_date?: string
+          old_start_hour?: number
+          professor_id?: string | null
+          reason?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_reschedules_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_reschedules_checkout_order_id_fkey"
+            columns: ["checkout_order_id"]
+            isOneToOne: false
+            referencedRelation: "checkout_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookings: {
         Row: {
           amount_cents: number | null
@@ -1638,6 +1704,15 @@ export type Database = {
           p_booking_type: Database["public"]["Enums"]["booking_type"]
           p_hours: number[]
           p_professor_id?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      reschedule_paid_booking: {
+        Args: {
+          p_booking_id: string
+          p_new_booking_date: string
+          p_new_start_hour: number
           p_user_id: string
         }
         Returns: Json

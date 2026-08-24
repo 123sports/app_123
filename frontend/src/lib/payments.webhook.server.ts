@@ -4,6 +4,7 @@ import {
   InvalidWebhookSignatureError,
   validateMercadoPagoWebhook,
 } from "@/lib/mercado-pago.server";
+import { flagPaymentForReview } from "@/lib/payment-review.server";
 
 type WebhookBody = {
   action?: string;
@@ -66,23 +67,6 @@ function paymentStatus(status?: string) {
 
 function cents(value?: number) {
   return Math.round(Number(value ?? 0) * 100);
-}
-
-async function notifyPaymentReview(orderId: string, reason: string) {
-  const { data: admins } = await (supabaseAdmin as any)
-    .from("user_roles")
-    .select("user_id")
-    .eq("role", "admin");
-
-  if (!admins?.length) return;
-  await (supabaseAdmin as any).from("notifications").insert(
-    admins.map((admin: { user_id: string }) => ({
-      user_id: admin.user_id,
-      title: "Pagamento requer conferencia",
-      body: `Pedido ${orderId}: ${reason}`,
-      kind: "payment_review",
-    })),
-  );
 }
 
 export async function handleMercadoPagoWebhook(request: Request) {
@@ -244,13 +228,11 @@ export async function handleMercadoPagoWebhook(request: Request) {
   }
 
   if (processingError) {
-    await (supabaseAdmin as any)
-      .from("checkout_orders")
-      .update({ status: "paid_needs_review" })
-      .eq("id", order.id)
-      .neq("status", "paid");
-    await notifyPaymentReview(order.id, processingError);
-  } else {
+    const reviewStatus = await flagPaymentForReview(order.id, processingError);
+    if (reviewStatus === "paid") processingError = null;
+  }
+
+  if (!processingError) {
     const orderPatch = mappedStatus === "paid"
       ? { status: "paid", paid_at: payment.date_approved ?? new Date().toISOString() }
       : mappedStatus === "refunded"
