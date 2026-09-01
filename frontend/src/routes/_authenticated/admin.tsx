@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
-  LayoutDashboard, CalendarClock, Users, Wallet, CreditCard, UserPlus, Trophy, ArrowLeft, Inbox, Settings, Gift, Store, Handshake, Award, MessageSquareHeart, Lock, GraduationCap, FileText, FileSignature, ScrollText, Presentation, QrCode,
+  LayoutDashboard, CalendarClock, Users, ArrowLeft, Settings, Lock, GraduationCap, QrCode,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { NotificationsBell } from "@/components/NotificationsBell";
@@ -60,45 +60,30 @@ const ADMIN_NAV: SideNavGroup[] = [
       { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
       { to: "/admin/reservas", label: "Reservas", icon: CalendarClock },
       { to: "/admin/bloqueios", label: "Bloqueios", icon: Lock },
-      { to: "/admin/match-aberto", label: "Match Aberto", icon: Handshake },
     ],
   },
   {
     label: "Aulas",
     items: [
       { to: "/admin/aulas-planos", label: "Planos de Aulas", icon: GraduationCap },
-      { to: "/admin/aulas-contratos", label: "Contratos", icon: FileSignature },
-      { to: "/admin/aulas-template", label: "Termo Padrão", icon: FileText },
-      { to: "/admin/contrato-config", label: "Config. Contrato", icon: ScrollText },
-      { to: "/admin/termos", label: "Termo de Aceite", icon: ScrollText },
     ],
   },
   {
     label: "Pessoas",
     items: [
       { to: "/admin/alunos", label: "Alunos", icon: Users },
-      { to: "/admin/leads", label: "Leads", icon: Inbox },
-      { to: "/admin/avaliacoes", label: "Avaliações", icon: Award },
-      { to: "/admin/feedbacks", label: "Feedbacks", icon: MessageSquareHeart },
-      { to: "/admin/equipe", label: "Equipe", icon: UserPlus },
     ],
   },
   {
     label: "Negócio",
     items: [
       { to: "/admin/pagamentos", label: "Pagamentos", icon: QrCode },
-      { to: "/admin/financeiro", label: "Financeiro", icon: Wallet },
-      { to: "/admin/operadoras", label: "Operadoras", icon: CreditCard },
-      { to: "/admin/gamificacao", label: "Gamificação", icon: Trophy },
-      { to: "/admin/indicacoes", label: "Indicações", icon: Gift },
-      { to: "/admin/loja", label: "Loja", icon: Store },
     ],
   },
   {
     label: "Sistema",
     items: [
       { to: "/admin/configuracoes", label: "Configurações", icon: Settings },
-      { to: "/pitch", label: "Pitch Investidor", icon: Presentation },
     ],
   },
 ];
@@ -116,8 +101,6 @@ const PROFESSOR_NAV: SideNavGroup[] = [
     label: "Alunos",
     items: [
       { to: "/admin/alunos", label: "Meus alunos", icon: Users },
-      { to: "/admin/avaliacoes", label: "Avaliações", icon: Award },
-      { to: "/admin/feedbacks", label: "Feedbacks", icon: MessageSquareHeart },
     ],
   },
 ];
