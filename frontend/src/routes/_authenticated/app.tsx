@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Home, User, CalendarDays, ShieldCheck, Gift, Store, Handshake, TrendingUp, Star, GraduationCap, QrCode } from "lucide-react";
+import { Home, User, CalendarDays, ShieldCheck, GraduationCap, QrCode } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { TermsGate } from "@/components/TermsGate";
@@ -21,18 +21,11 @@ const NAV: SideNavGroup[] = [
       { to: "/app/agenda", label: "Agenda", icon: CalendarDays },
       { to: "/app/pagamentos", label: "Pagamentos", icon: QrCode },
       { to: "/app/aulas", label: "Minhas Aulas", icon: GraduationCap },
-      { to: "/app/match-aberto", label: "Match Aberto", icon: Handshake },
-      { to: "/app/evolucao", label: "Evolução", icon: TrendingUp },
     ],
   },
   {
     label: "Mais",
-    items: [
-      { to: "/app/loja", label: "Loja", icon: Store },
-      { to: "/app/indicacoes", label: "Indique e ganhe", icon: Gift },
-      { to: "/app/feedback", label: "Avaliar prof.", icon: Star },
-      { to: "/app/perfil", label: "Perfil", icon: User },
-    ],
+    items: [{ to: "/app/perfil", label: "Perfil", icon: User }],
   },
 ];
 
@@ -55,7 +48,9 @@ function AppShell() {
       const hasAdminRole = (roles ?? []).some((r) => r.role === "admin");
       setIsAdmin(hasAdminRole && getAudience() === "equipe");
       if (data?.avatar_url) {
-        const { data: signed } = await supabase.storage.from("avatars").createSignedUrl(data.avatar_url, 3600);
+        const { data: signed } = await supabase.storage
+          .from("avatars")
+          .createSignedUrl(data.avatar_url, 3600);
         setAvatar(signed?.signedUrl ?? null);
       }
     })();
