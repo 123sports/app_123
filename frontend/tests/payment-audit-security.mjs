@@ -12,7 +12,10 @@ const env = Object.fromEntries(
       const separator = line.indexOf("=");
       return [
         line.slice(0, separator).trim(),
-        line.slice(separator + 1).trim().replace(/^['"]|['"]$/g, ""),
+        line
+          .slice(separator + 1)
+          .trim()
+          .replace(/^['"]|['"]$/g, ""),
       ];
     }),
 );
@@ -64,7 +67,11 @@ async function findFreeHours(count) {
   for (let days = 7; days <= 30; days += 1) {
     const date = isoDateFromNow(days);
     const [{ data: bookings }, { data: blocks }] = await Promise.all([
-      admin.from("bookings").select("start_hour").eq("booking_date", date).neq("status", "cancelada"),
+      admin
+        .from("bookings")
+        .select("start_hour")
+        .eq("booking_date", date)
+        .neq("status", "cancelada"),
       admin.from("blocked_slots").select("start_hour").eq("block_date", date),
     ]);
     const unavailable = new Set([
@@ -103,7 +110,10 @@ try {
     const payload = attempt.provider_payload ?? {};
     assert(!payload.payer, "A stored Mercado Pago payload still contains payer PII.");
     assert(!payload.point_of_interaction, "A stored provider payload duplicates Pix credentials.");
-    assert(!payload.additional_info, "A stored provider payload contains unnecessary customer data.");
+    assert(
+      !payload.additional_info,
+      "A stored provider payload contains unnecessary customer data.",
+    );
   }
 
   const { data: existingPaidOrders, error: existingPaidOrdersError } = await admin
@@ -115,10 +125,7 @@ try {
   if (existingPaidOrdersError) throw existingPaidOrdersError;
   for (const order of existingPaidOrders ?? []) {
     const [{ data: items }, { data: bookings }, { data: attempts }] = await Promise.all([
-      admin
-        .from("checkout_items")
-        .select("total_amount_cents")
-        .eq("checkout_order_id", order.id),
+      admin.from("checkout_items").select("total_amount_cents").eq("checkout_order_id", order.id),
       admin
         .from("bookings")
         .select("amount_cents, status, payment_status")
@@ -154,6 +161,33 @@ try {
   const owner = await createTemporaryUser("owner");
   const outsider = await createTemporaryUser("outsider");
 
+  const forgedSlot = await findFreeHours(1);
+  const { error: forgedBookingError } = await owner.client.from("bookings").insert({
+    user_id: owner.id,
+    booking_date: forgedSlot.date,
+    start_hour: forgedSlot.hours[0],
+    duration_hours: 1,
+    type: "quadra_livre",
+    status: "confirmada",
+    payment_status: "pago",
+    payment_method: "pix",
+    price_cents: 100,
+    amount_cents: 100,
+    attended: false,
+  });
+  assert(forgedBookingError, "A student can insert a paid booking without checkout.");
+
+  const { error: forgedOrderError } = await owner.client.from("checkout_orders").insert({
+    user_id: owner.id,
+    kind: "booking",
+    status: "paid",
+    currency: "BRL",
+    amount_cents: 100,
+    description: "Forged browser order",
+    provider: "mercado_pago",
+  });
+  assert(forgedOrderError, "A student can insert a forged paid checkout order.");
+
   const { data: leakedProfile, error: profileError } = await owner.client
     .from("profiles")
     .select("id, cpf, phone, address")
@@ -177,6 +211,16 @@ try {
     },
   });
   if (paidAttemptError) throw paidAttemptError;
+
+  const { error: forgedAttemptError } = await owner.client.from("payment_attempts").insert({
+    checkout_order_id: paidHold.order_id,
+    provider: "mercado_pago",
+    provider_payment_id: `FORGED-${crypto.randomUUID()}`,
+    payment_method: "pix",
+    status: "paid",
+    amount_cents: paidHold.amount_cents,
+  });
+  assert(forgedAttemptError, "A student can insert a forged paid payment attempt.");
 
   const { error: rawPayloadError } = await owner.client
     .from("payment_attempts")
@@ -281,6 +325,7 @@ try {
   assert(rateLimitError, "The checkout creation rate limit was not enforced.");
 
   console.log("PASS: private profiles and raw provider payloads are not exposed.");
+  console.log("PASS: browser clients cannot forge bookings, orders or payment attempts.");
   console.log("PASS: existing provider payloads and paid orders are internally consistent.");
   console.log("PASS: payment attempts remain isolated by owner.");
   console.log("PASS: paid states cannot regress and refunds release future bookings.");

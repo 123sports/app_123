@@ -10,6 +10,7 @@ import {
   decidePaymentTransition,
   mercadoPagoPaymentStatus,
   safeMercadoPagoPayload,
+  validateMercadoPagoPaymentForOrder,
   type CheckoutOrderStatus,
 } from "@/lib/payment-security";
 import {
@@ -27,6 +28,8 @@ const BOOKING_TYPES = [
   "aula_quarteto",
   "teste",
 ] as const;
+
+const PAYMENT_SYNC_MIN_INTERVAL_MS = 4_000;
 
 const createSchema = z
   .object({
@@ -52,9 +55,26 @@ type HoldResult = {
   idempotency_key: string;
 };
 
+function redactSensitiveString(value: string) {
+  let redacted = value.replace(
+    /\b(?:APP_USR|TEST)-[A-Za-z0-9._-]+|\bsb_secret_[A-Za-z0-9._-]+/g,
+    "[redacted]",
+  );
+  for (const secret of [
+    process.env.MERCADO_PAGO_ACCESS_TOKEN,
+    process.env.MERCADO_PAGO_WEBHOOK_SECRET,
+    process.env.SUPABASE_SECRET_KEY,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  ]) {
+    if (secret && secret.length >= 8) redacted = redacted.split(secret).join("[redacted]");
+  }
+  return redacted;
+}
+
 function sanitizeLogValue(value: unknown, depth = 0): unknown {
   if (depth > 2) return "[truncated]";
-  if (value == null || ["string", "number", "boolean"].includes(typeof value)) return value;
+  if (typeof value === "string") return redactSensitiveString(value);
+  if (value == null || ["number", "boolean"].includes(typeof value)) return value;
   if (Array.isArray(value))
     return value.slice(0, 5).map((item) => sanitizeLogValue(item, depth + 1));
   if (typeof value !== "object") return String(value);
@@ -82,7 +102,7 @@ function safeMercadoPagoError(error: unknown) {
   }
 
   if (error instanceof Error) {
-    details.message = error.message;
+    details.message = redactSensitiveString(error.message);
     details.name = error.name;
   }
 
@@ -149,10 +169,6 @@ function localPixPayload(orderId: string, amountCents: number) {
     `AMOUNT=${(amountCents / 100).toFixed(2)}`,
     "RECEIVER=ON TENNIS TESTE LOCAL",
   ].join("|");
-}
-
-function cents(value?: number) {
-  return Math.round(Number(value ?? 0) * 100);
 }
 
 export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
@@ -304,6 +320,11 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
       providerPayment.status,
       providerPayment.status_detail,
     );
+    const paymentValidation = validateMercadoPagoPaymentForOrder(providerPayment, {
+      id: hold.order_id,
+      amount_cents: hold.amount_cents,
+      currency: "BRL",
+    });
     const { error: attemptError } = await (supabaseAdmin as any).from("payment_attempts").insert({
       id: paymentAttemptId,
       checkout_order_id: hold.order_id,
@@ -334,6 +355,26 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
         reason: "payment_attempt_persist_failed",
       });
       throw new Error("Pix criado, mas a confirmacao local falhou. O horario foi liberado.");
+    }
+
+    if (!paymentValidation.valid) {
+      const reason = "Divergencia de valor, moeda, metodo ou referencia externa.";
+      console.error("[MercadoPago] Created Pix failed reconciliation", {
+        orderId: hold.order_id,
+        providerPaymentId,
+        validationErrors: paymentValidation.errors,
+      });
+      if (initialPaymentStatus === "paid" || initialPaymentStatus === "paid_needs_review") {
+        await flagPaymentForReview(hold.order_id, reason);
+        throw new Error("Pagamento recebido e em analise. Aguarde a confirmacao da reserva.");
+      }
+      await releaseFailedCheckoutHold({
+        orderId: hold.order_id,
+        userId: context.userId,
+        providerPaymentId,
+        reason: "created_payment_reconciliation_failed",
+      });
+      throw new Error("O Pix retornou dados inconsistentes e foi cancelado com seguranca.");
     }
 
     if (initialPaymentStatus === "paid") {
@@ -396,7 +437,7 @@ export const syncBookingPixCheckoutServer = createServerFn({ method: "POST" })
 
     const { data: attempt, error: attemptError } = await (supabaseAdmin as any)
       .from("payment_attempts")
-      .select("id, provider, provider_payment_id")
+      .select("id, checkout_order_id, provider, provider_payment_id, updated_at")
       .eq("checkout_order_id", order.id)
       .eq("provider", "mercado_pago")
       .order("created_at", { ascending: false })
@@ -405,14 +446,21 @@ export const syncBookingPixCheckoutServer = createServerFn({ method: "POST" })
     if (attemptError) throw new Error(attemptError.message);
     if (!attempt?.provider_payment_id) return { status: order.status as string };
 
+    const syncCutoff = new Date(Date.now() - PAYMENT_SYNC_MIN_INTERVAL_MS).toISOString();
+    const { data: syncClaim, error: syncClaimError } = await (supabaseAdmin as any)
+      .from("payment_attempts")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", attempt.id)
+      .eq("checkout_order_id", order.id)
+      .lt("updated_at", syncCutoff)
+      .select("id")
+      .maybeSingle();
+    if (syncClaimError) throw new Error(syncClaimError.message);
+    if (!syncClaim) return { status: order.status as string };
+
     const payment = await getMercadoPagoPayment(attempt.provider_payment_id);
     const mappedStatus = mercadoPagoPaymentStatus(payment.status, payment.status_detail);
-    const externalReference = String(payment.external_reference ?? "");
-    const amountMatches = cents(payment.transaction_amount) === order.amount_cents;
-    const currencyMatches = payment.currency_id === order.currency;
-    const referenceMatches =
-      externalReference === order.id ||
-      String(payment.metadata?.checkout_order_id ?? "") === order.id;
+    const paymentValidation = validateMercadoPagoPaymentForOrder(payment, order);
 
     const { error: updateAttemptError } = await (supabaseAdmin as any)
       .from("payment_attempts")
@@ -426,8 +474,8 @@ export const syncBookingPixCheckoutServer = createServerFn({ method: "POST" })
     if (updateAttemptError) throw new Error(updateAttemptError.message);
 
     let processingError: string | null = null;
-    if (!amountMatches || !currencyMatches || !referenceMatches) {
-      processingError = "Divergencia de valor, moeda ou referencia externa.";
+    if (!paymentValidation.valid) {
+      processingError = "Divergencia de valor, moeda, metodo ou referencia externa.";
     } else if (
       mappedStatus === "paid" &&
       order.status === "pending" &&
@@ -436,10 +484,7 @@ export const syncBookingPixCheckoutServer = createServerFn({ method: "POST" })
       processingError = "Pagamento aprovado sem todas as reservas ativas; conferir manualmente.";
     }
 
-    const decision = decidePaymentTransition(
-      order.status as CheckoutOrderStatus,
-      mappedStatus,
-    );
+    const decision = decidePaymentTransition(order.status as CheckoutOrderStatus, mappedStatus);
     processingError ??= decision.reviewReason;
 
     if (processingError) {

@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { brl } from "@/lib/money";
 import { cleanupExpiredLocalPixCheckouts } from "@/lib/payments";
 import { PageHeader } from "@/components/PageHeader";
+import { addMonths, startOfMonth } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/admin/pagamentos")({
   component: AdminPayments,
@@ -23,21 +24,63 @@ type CheckoutOrder = {
   created_at: string;
 };
 
+function effectiveStatus(order: CheckoutOrder) {
+  if (
+    order.status === "pending"
+    && order.expires_at
+    && new Date(order.expires_at).getTime() <= Date.now()
+  ) {
+    return "expired";
+  }
+  return order.status;
+}
+
 function AdminPayments() {
   const [orders, setOrders] = useState<CheckoutOrder[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
+  const [metrics, setMetrics] = useState({ revenueMonth: 0, pending: 0, total: 0 });
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "pending" | "paid" | "expired" | "cancelled">("all");
 
   const load = async () => {
     await cleanupExpiredLocalPixCheckouts();
-    const { data: orderRows } = await (supabase as any)
-      .from("checkout_orders")
-      .select("id, user_id, kind, status, amount_cents, description, provider, expires_at, paid_at, created_at")
-      .order("created_at", { ascending: false })
-      .limit(300);
+    const now = new Date();
+    const paidFrom = startOfMonth(now).toISOString();
+    const paidUntil = startOfMonth(addMonths(now, 1)).toISOString();
+    const activePendingFilter = `expires_at.is.null,expires_at.gt.${now.toISOString()}`;
+    const [
+      { data: orderRows },
+      { data: paidRows },
+      { count: pendingCount },
+      { count: totalCount },
+    ] = await Promise.all([
+      (supabase as any)
+        .from("checkout_orders")
+        .select("id, user_id, kind, status, amount_cents, description, provider, expires_at, paid_at, created_at")
+        .order("created_at", { ascending: false })
+        .limit(300),
+      (supabase as any)
+        .from("checkout_orders")
+        .select("amount_cents")
+        .eq("status", "paid")
+        .gte("paid_at", paidFrom)
+        .lt("paid_at", paidUntil),
+      (supabase as any)
+        .from("checkout_orders")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending")
+        .or(activePendingFilter),
+      (supabase as any)
+        .from("checkout_orders")
+        .select("id", { count: "exact", head: true }),
+    ]);
     const nextOrders = (orderRows ?? []) as CheckoutOrder[];
     setOrders(nextOrders);
+    setMetrics({
+      revenueMonth: (paidRows ?? []).reduce((sum: number, order: { amount_cents: number }) => sum + order.amount_cents, 0),
+      pending: pendingCount ?? 0,
+      total: totalCount ?? 0,
+    });
 
     const ids = [...new Set(nextOrders.map((order) => order.user_id))];
     if (ids.length) {
@@ -58,24 +101,22 @@ function AdminPayments() {
       .channel("admin-payments")
       .on("postgres_changes", { event: "*", schema: "public", table: "checkout_orders" }, () => void load())
       .subscribe();
+    const refreshInterval = window.setInterval(() => void load(), 60_000);
     return () => {
       window.removeEventListener("on-tennis-local-data-change", handleLocalChange);
+      window.clearInterval(refreshInterval);
       void supabase.removeChannel(channel);
     };
   }, []);
 
   const visible = useMemo(
-    () => orders.filter((order) => filter === "all" || order.status === filter),
+    () => orders.filter((order) => filter === "all" || effectiveStatus(order) === filter),
     [filter, orders],
   );
-  const paid = orders.filter((order) => order.status === "paid");
-  const pending = orders.filter((order) => order.status === "pending");
-  const revenue = paid.reduce((sum, order) => sum + order.amount_cents, 0);
-
   return (
     <div className="stack-app animate-float-in">
       <PageHeader
-        eyebrow="Admin · Financeiro"
+        eyebrow="Admin · Pagamentos"
         title="Pagamentos"
         subtitle="Acompanhe cobranças Pix, confirmações e expirações."
         actions={
@@ -94,9 +135,9 @@ function AdminPayments() {
       />
 
       <section className="grid auto-rows-fr gap-4 md:grid-cols-3">
-        <Metric icon={CheckCircle2} label="Recebido" value={brl(revenue)} />
-        <Metric icon={Clock3} label="Aguardando Pix" value={pending.length} />
-        <Metric icon={ReceiptText} label="Pedidos" value={orders.length} />
+        <Metric icon={CheckCircle2} label="Pix recebido no mês" value={brl(metrics.revenueMonth)} />
+        <Metric icon={Clock3} label="Aguardando Pix" value={metrics.pending} />
+        <Metric icon={ReceiptText} label="Cobranças Pix" value={metrics.total} />
       </section>
 
       <section className="plane p-0">
@@ -140,7 +181,7 @@ function AdminPayments() {
                           <QrCode className="h-4 w-4" /> Pix
                         </span>
                       </td>
-                      <td className="p-3"><Status status={order.status} /></td>
+                      <td className="p-3"><Status status={effectiveStatus(order)} /></td>
                       <td className="p-3 text-right type-data font-semibold">{brl(order.amount_cents)}</td>
                     </tr>
                   );

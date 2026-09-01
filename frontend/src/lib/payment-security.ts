@@ -21,6 +21,48 @@ export type PaymentTransitionDecision = {
   reviewReason: string | null;
 };
 
+type MercadoPagoPaymentIdentity = {
+  transaction_amount?: number | null;
+  currency_id?: string | null;
+  payment_method_id?: string | null;
+  external_reference?: string | null;
+  metadata?: { checkout_order_id?: unknown } | null;
+};
+
+type CheckoutOrderIdentity = {
+  id: string;
+  amount_cents: number;
+  currency: string;
+};
+
+export type MercadoPagoPaymentValidation = {
+  valid: boolean;
+  errors: string[];
+  amountCents: number | null;
+};
+
+export function validateMercadoPagoPaymentForOrder(
+  payment: MercadoPagoPaymentIdentity,
+  order: CheckoutOrderIdentity,
+): MercadoPagoPaymentValidation {
+  const amount = Number(payment.transaction_amount);
+  const amountCents = Number.isFinite(amount) ? Math.round(amount * 100) : null;
+  const metadataOrderId = String(payment.metadata?.checkout_order_id ?? "");
+  const errors: string[] = [];
+
+  if (amountCents !== order.amount_cents) errors.push("amount_mismatch");
+  if (payment.currency_id !== order.currency) errors.push("currency_mismatch");
+  if (payment.payment_method_id !== "pix") errors.push("payment_method_mismatch");
+  if (String(payment.external_reference ?? "") !== order.id) {
+    errors.push("external_reference_mismatch");
+  }
+  if (metadataOrderId && metadataOrderId !== order.id) {
+    errors.push("metadata_reference_mismatch");
+  }
+
+  return { valid: errors.length === 0, errors, amountCents };
+}
+
 export function mercadoPagoPaymentStatus(
   status?: string | null,
   statusDetail?: string | null,

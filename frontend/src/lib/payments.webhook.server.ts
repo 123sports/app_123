@@ -10,6 +10,7 @@ import {
   decidePaymentTransition,
   mercadoPagoPaymentStatus,
   safeMercadoPagoPayload,
+  validateMercadoPagoPaymentForOrder,
   type CheckoutOrderStatus,
   type ReconciledPaymentStatus,
 } from "@/lib/payment-security";
@@ -21,6 +22,7 @@ type WebhookBody = {
 };
 
 const MAX_WEBHOOK_BYTES = 65_536;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function signatureAgeSeconds(signature: string | null) {
   const timestamp = signature
@@ -55,10 +57,6 @@ async function readLimitedBody(request: Request) {
     offset += chunk.byteLength;
   }
   return new TextDecoder().decode(body);
-}
-
-function cents(value?: number) {
-  return Math.round(Number(value ?? 0) * 100);
 }
 
 function orderPatch(status: CheckoutOrderStatus, paidAt?: string | null) {
@@ -127,10 +125,7 @@ export async function handleMercadoPagoWebhook(request: Request) {
   }
 
   const dataId = String(
-    url.searchParams.get("data.id")
-    ?? url.searchParams.get("data_id")
-    ?? body.data?.id
-    ?? "",
+    url.searchParams.get("data.id") ?? url.searchParams.get("data_id") ?? body.data?.id ?? "",
   ).trim();
   const requestId = request.headers.get("x-request-id")?.trim() ?? null;
 
@@ -182,7 +177,37 @@ export async function handleMercadoPagoWebhook(request: Request) {
   const providerPaymentId = String(payment.id ?? dataId);
   const externalReference = String(payment.external_reference ?? "");
   const orderId = externalReference || String(payment.metadata?.checkout_order_id ?? "");
-  if (!orderId) {
+
+  const { data: event, error: eventError } = await (supabaseAdmin as any)
+    .from("payment_events")
+    .upsert(
+      {
+        provider: "mercado_pago",
+        provider_event_id: requestId,
+        event_type: body.action ?? "payment.updated",
+        signature_valid: true,
+        payload: body,
+      },
+      {
+        onConflict: "provider,provider_event_id",
+      },
+    )
+    .select("id")
+    .single();
+  if (eventError) throw eventError;
+
+  if (!UUID_PATTERN.test(orderId)) {
+    await (supabaseAdmin as any)
+      .from("payment_events")
+      .update({
+        processed_at: new Date().toISOString(),
+        processing_error: "Pagamento sem referencia local valida.",
+      })
+      .eq("id", event.id);
+    console.warn("[MercadoPago] Verified payment has no valid local order reference", {
+      requestId,
+      providerPaymentId,
+    });
     return new Response(null, { status: 200 });
   }
 
@@ -193,32 +218,27 @@ export async function handleMercadoPagoWebhook(request: Request) {
     .maybeSingle();
   if (orderError) throw orderError;
   if (!order) {
+    await (supabaseAdmin as any)
+      .from("payment_events")
+      .update({
+        processed_at: new Date().toISOString(),
+        processing_error: "Pedido local nao encontrado.",
+      })
+      .eq("id", event.id);
+    console.warn("[MercadoPago] Verified payment references an unknown order", {
+      requestId,
+      providerPaymentId,
+      orderId,
+    });
     return new Response(null, { status: 200 });
   }
 
-  const { data: event, error: eventError } = await (supabaseAdmin as any)
-    .from("payment_events")
-    .upsert({
-      provider: "mercado_pago",
-      provider_event_id: requestId,
-      event_type: body.action ?? "payment.updated",
-      signature_valid: true,
-      payload: body,
-    }, {
-      onConflict: "provider,provider_event_id",
-    })
-    .select("id")
-    .single();
-  if (eventError) throw eventError;
-
   const mappedStatus = mercadoPagoPaymentStatus(payment.status, payment.status_detail);
-  const amountMatches = cents(payment.transaction_amount) === order.amount_cents;
-  const currencyMatches = payment.currency_id === order.currency;
-  const referenceMatches = externalReference === order.id;
+  const paymentValidation = validateMercadoPagoPaymentForOrder(payment, order);
 
   let { data: attempt } = await (supabaseAdmin as any)
     .from("payment_attempts")
-    .select("id")
+    .select("id, checkout_order_id")
     .eq("provider", "mercado_pago")
     .eq("provider_payment_id", providerPaymentId)
     .maybeSingle();
@@ -233,7 +253,7 @@ export async function handleMercadoPagoWebhook(request: Request) {
         provider_payment_id: providerPaymentId,
         payment_method: "pix",
         status: mappedStatus,
-        amount_cents: cents(payment.transaction_amount),
+        amount_cents: order.amount_cents,
         qr_code: transaction?.qr_code ?? null,
         qr_code_base64: transaction?.qr_code_base64 ?? null,
         ticket_url: transaction?.ticket_url ?? null,
@@ -241,16 +261,17 @@ export async function handleMercadoPagoWebhook(request: Request) {
         paid_at: payment.date_approved ?? null,
         provider_payload: safeMercadoPagoPayload(payment),
       })
-      .select("id")
+      .select("id, checkout_order_id")
       .single();
     if (insertError) throw insertError;
     attempt = inserted;
-  } else {
+  } else if (attempt.checkout_order_id === order.id) {
     const { error: updateAttemptError } = await (supabaseAdmin as any)
       .from("payment_attempts")
       .update({
         status: mappedStatus,
-        paid_at: mappedStatus === "paid" ? payment.date_approved ?? new Date().toISOString() : null,
+        paid_at:
+          mappedStatus === "paid" ? (payment.date_approved ?? new Date().toISOString()) : null,
         provider_payload: safeMercadoPagoPayload(payment),
       })
       .eq("id", attempt.id);
@@ -258,8 +279,11 @@ export async function handleMercadoPagoWebhook(request: Request) {
   }
 
   let processingError: string | null = null;
-  if (!amountMatches || !currencyMatches || !referenceMatches) {
-    processingError = "Divergencia de valor, moeda ou referencia externa.";
+  if (attempt.checkout_order_id !== order.id) {
+    processingError = "Pagamento ja vinculado a outro pedido local.";
+    await flagPaymentForReview(attempt.checkout_order_id, processingError);
+  } else if (!paymentValidation.valid) {
+    processingError = "Divergencia de valor, moeda, metodo ou referencia externa.";
   } else if (
     mappedStatus === "paid" &&
     order.status === "pending" &&

@@ -6,6 +6,7 @@ import {
   decidePaymentTransition,
   mercadoPagoPaymentStatus,
   safeMercadoPagoPayload,
+  validateMercadoPagoPaymentForOrder,
 } from "../src/lib/payment-security.ts";
 
 test("normalizes Mercado Pago terminal and review statuses", () => {
@@ -44,6 +45,34 @@ test("removes payer and QR data from the stored provider audit payload", () => {
   assert.equal("payer" in sanitized, false);
   assert.equal("point_of_interaction" in sanitized, false);
   assert.deepEqual(sanitized.metadata, { checkout_order_id: "order-id" });
+});
+
+test("accepts only Pix payments that reconcile exactly with the checkout order", () => {
+  const order = { id: "order-id", amount_cents: 100, currency: "BRL" };
+  const validPayment = {
+    transaction_amount: 1,
+    currency_id: "BRL",
+    payment_method_id: "pix",
+    external_reference: "order-id",
+    metadata: { checkout_order_id: "order-id" },
+  };
+
+  assert.deepEqual(validateMercadoPagoPaymentForOrder(validPayment, order), {
+    valid: true,
+    errors: [],
+    amountCents: 100,
+  });
+
+  for (const payment of [
+    { ...validPayment, transaction_amount: 0.01 },
+    { ...validPayment, currency_id: "USD" },
+    { ...validPayment, payment_method_id: "visa" },
+    { ...validPayment, external_reference: "another-order" },
+    { ...validPayment, metadata: { checkout_order_id: "another-order" } },
+    { ...validPayment, transaction_amount: Number.NaN },
+  ]) {
+    assert.equal(validateMercadoPagoPaymentForOrder(payment, order).valid, false);
+  }
 });
 
 test("accepts a current Mercado Pago signature and rejects a replay older than five minutes", () => {

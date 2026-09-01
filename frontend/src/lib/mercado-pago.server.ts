@@ -65,9 +65,9 @@ function webhookUrl() {
 
 export function isMercadoPagoConfigured() {
   return Boolean(
-    process.env.MERCADO_PAGO_ACCESS_TOKEN?.trim()
-    && process.env.MERCADO_PAGO_WEBHOOK_SECRET?.trim()
-    && process.env.APP_BASE_URL?.trim(),
+    process.env.MERCADO_PAGO_ACCESS_TOKEN?.trim() &&
+    process.env.MERCADO_PAGO_WEBHOOK_SECRET?.trim() &&
+    process.env.APP_BASE_URL?.trim(),
   );
 }
 
@@ -141,7 +141,9 @@ export async function getMercadoPagoPayment(paymentId: string) {
 }
 
 export async function cancelMercadoPagoPayment(paymentId: string) {
-  return paymentClient().cancel({ id: paymentId });
+  const payment = await paymentClient().cancel({ id: paymentId });
+  assertPaymentEnvironment(payment.live_mode);
+  return payment;
 }
 
 export function validateMercadoPagoWebhook(input: {

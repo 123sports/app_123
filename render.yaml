@@ -25,7 +25,7 @@ services:
       - key: VITE_PAYMENT_PROVIDER
         value: mercado_pago
       - key: APP_BASE_URL
-        value: https://app-123-fx8f.onrender.com
+        value: https://app.olimpioneto.com.br
       - key: PAYMENT_PROVIDER
         value: mercado_pago
       - key: ALLOW_LOCAL_PAYMENT_SIMULATION

@@ -5,6 +5,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { brl } from "@/lib/money";
 import { format } from "date-fns";
 
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pendente: "Aguardando Pix",
+  pago: "Pix confirmado",
+  expirado: "Pix expirado",
+  cancelado: "Cancelado",
+  estornado: "Pix estornado",
+  isento: "Isento",
+};
+
+function paymentStatusLabel(status: string) {
+  return PAYMENT_STATUS_LABELS[status] ?? status;
+}
+
 export const Route = createFileRoute("/_authenticated/admin/aluno/$id")({
   component: AlunoDetalhe,
 });
@@ -85,8 +98,8 @@ function AlunoDetalhe() {
             <Mini label="Faltas" value={missed} accent="bad" />
             {staffRole === "admin" && (
               <>
-                <Mini label="Pgto. pendente" value={unpaid} accent={unpaid ? "bad" : undefined} />
-                <Mini label="Receita gerada" value={brl(revenue)} />
+                <Mini label="Pix pendentes" value={unpaid} accent={unpaid ? "bad" : undefined} />
+                <Mini label="Receita Pix" value={brl(revenue)} />
               </>
             )}
           </section>
@@ -122,7 +135,9 @@ function AlunoDetalhe() {
                         <div className="type-micro text-muted-foreground">{b.type.replace("_", " ")}</div>
                       </div>
                       <div className="text-right">
-                        <Badge color={b.payment_status === "pago" ? "good" : "warn"}>{b.payment_status}</Badge>
+                        <Badge color={b.payment_status === "pago" ? "good" : b.payment_status === "pendente" ? "warn" : "neutral"}>
+                          {paymentStatusLabel(b.payment_status)}
+                        </Badge>
                         {b.attended === true && <span className="ml-1 type-micro text-primary">presente</span>}
                         {b.attended === false && <span className="ml-1 type-micro text-destructive">faltou</span>}
                       </div>
@@ -152,7 +167,11 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between"><span className="text-muted-foreground">{label}</span><span>{value}</span></div>
   );
 }
-function Badge({ color, children }: { color: "good" | "warn"; children: any }) {
-  const c = color === "good" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground";
+function Badge({ color, children }: { color: "good" | "warn" | "neutral"; children: any }) {
+  const c = color === "good"
+    ? "bg-primary/20 text-primary"
+    : color === "warn"
+      ? "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
+      : "bg-muted text-muted-foreground";
   return <span className={`rounded-full px-2 py-0.5 text-xs ${c}`}>{children}</span>;
 }

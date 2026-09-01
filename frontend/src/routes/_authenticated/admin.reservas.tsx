@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Filter, X, List, CalendarDays, Columns3, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { brl, cents } from "@/lib/money";
+import { brl } from "@/lib/money";
 import { format, startOfMonth, endOfMonth, addDays, isSameDay, isSameMonth, startOfWeek, addMonths, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { PageHeader } from "@/components/PageHeader";
@@ -21,16 +21,35 @@ type Row = {
   type: string;
   status: string;
   payment_status: string;
-  payment_method: string | null;
-  card_operator_id: string | null;
   amount_cents: number | null;
   attended: boolean | null;
   professor_id: string | null;
 };
 
 type Profile = { id: string; full_name: string | null };
-type Operator = { id: string; name: string };
 type ViewMode = "lista" | "calendario" | "kanban" | "agenda";
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pendente: "Aguardando Pix",
+  pago: "Pix confirmado",
+  expirado: "Pix expirado",
+  cancelado: "Cancelado",
+  estornado: "Pix estornado",
+  isento: "Isento",
+};
+
+function paymentStatusLabel(status: string) {
+  return PAYMENT_STATUS_LABELS[status] ?? status;
+}
+
+function PaymentStatus({ status }: { status: string }) {
+  const color = status === "pago"
+    ? "bg-primary/15 text-primary"
+    : status === "pendente"
+      ? "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
+      : "bg-muted text-muted-foreground";
+  return <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-1 type-micro font-semibold ${color}`}>{paymentStatusLabel(status)}</span>;
+}
 
 const STATUSES: { key: Row["status"]; label: string; color: string }[] = [
   { key: "pendente", label: "Pendente", color: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30" },
@@ -43,7 +62,6 @@ function AdminReservas() {
   const { staffRole } = Route.useRouteContext();
   const [rows, setRows] = useState<Row[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
-  const [operators, setOperators] = useState<Operator[]>([]);
   const [pricing, setPricing] = useState<Record<string, number>>({});
   const [paymentFilter, setPaymentFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -52,15 +70,13 @@ function AdminReservas() {
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
 
   const load = async () => {
-    const [{ data: bs }, { data: ops }, { data: pr }] = await Promise.all([
+    const [{ data: bs }, { data: pr }] = await Promise.all([
       supabase.from("bookings")
-        .select("id, user_id, professor_id, booking_date, start_hour, type, status, payment_status, payment_method, card_operator_id, amount_cents, attended")
+        .select("id, user_id, professor_id, booking_date, start_hour, type, status, payment_status, amount_cents, attended")
         .order("booking_date", { ascending: false }).order("start_hour", { ascending: false }).limit(500),
-      supabase.from("card_operators").select("id, name").eq("active", true),
       supabase.from("pricing").select("booking_type, price_cents"),
     ]);
     setRows((bs ?? []) as Row[]);
-    setOperators(ops ?? []);
     setPricing(Object.fromEntries((pr ?? []).map((p: any) => [p.booking_type, p.price_cents])));
     const ids = [...new Set((bs ?? []).map((b: any) => b.user_id))];
     if (ids.length) {
@@ -108,13 +124,16 @@ function AdminReservas() {
       <PageHeader
         eyebrow="Admin · Reservas"
         title="Reservas"
-        subtitle="Gerencie pagamentos, presença e detalhes de cada reserva."
+        subtitle="Acompanhe pagamentos Pix, presença e detalhes de cada reserva."
         actions={<>
           <Filter className="h-4 w-4 text-muted-foreground" />
           <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)} className="rounded-full border border-input bg-background px-2 py-1.5 text-sm">
-            <option value="all">Todos pagamentos</option>
-            <option value="pendente">Pendente</option>
-            <option value="pago">Pago</option>
+            <option value="all">Todos os pagamentos Pix</option>
+            <option value="pendente">Aguardando Pix</option>
+            <option value="pago">Pix confirmado</option>
+            <option value="expirado">Pix expirado</option>
+            <option value="estornado">Pix estornado</option>
+            <option value="cancelado">Cancelado</option>
             <option value="isento">Isento</option>
           </select>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-full border border-input bg-background px-2 py-1.5 text-sm">
@@ -130,7 +149,7 @@ function AdminReservas() {
       <ViewTabs tabs={views} value={view} onChange={setView} />
 
       {view === "lista" && (
-        <ListaView rows={filtered} profiles={profiles} operators={operators} pricing={pricing} update={update} />
+        <ListaView rows={filtered} profiles={profiles} pricing={pricing} update={update} />
       )}
       {view === "calendario" && (
         <CalendarioView
@@ -185,9 +204,9 @@ function ProfessorReservationsView({
           <>
             <Filter className="h-4 w-4 text-muted-foreground" />
             <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)} className="rounded-full border border-input bg-background px-2 py-1.5 text-sm">
-              <option value="all">Todos pagamentos</option>
-              <option value="pendente">Pendente</option>
-              <option value="pago">Confirmado</option>
+              <option value="all">Todos os pagamentos Pix</option>
+              <option value="pendente">Aguardando Pix</option>
+              <option value="pago">Pix confirmado</option>
             </select>
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-full border border-input bg-background px-2 py-1.5 text-sm">
               <option value="all">Todos status</option>
@@ -219,7 +238,7 @@ function ProfessorReservationsView({
                     {profiles[booking.user_id]?.full_name ?? "Aluno"}
                   </Link>
                   <div className="type-small text-muted-foreground">
-                    {booking.type.replace("_", " ")} · {booking.payment_status === "pago" ? "pagamento confirmado" : "pagamento pendente"}
+                    {booking.type.replace("_", " ")} · {paymentStatusLabel(booking.payment_status)}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -256,8 +275,8 @@ function ProfessorReservationsView({
 }
 
 // ---------- LISTA ----------
-function ListaView({ rows, profiles, operators, pricing, update }: {
-  rows: Row[]; profiles: Record<string, Profile>; operators: Operator[];
+function ListaView({ rows, profiles, pricing, update }: {
+  rows: Row[]; profiles: Record<string, Profile>;
   pricing: Record<string, number>; update: (id: string, patch: Record<string, any>) => void;
 }) {
   return (
@@ -269,9 +288,7 @@ function ListaView({ rows, profiles, operators, pricing, update }: {
             <th className="p-3">Aluno</th>
             <th className="p-3">Tipo</th>
             <th className="p-3">Valor</th>
-            <th className="p-3">Pagto.</th>
-            <th className="p-3">Forma</th>
-            <th className="p-3">Operadora</th>
+            <th className="p-3">Pagamento Pix</th>
             <th className="p-3">Status</th>
             <th className="p-3">Presença</th>
           </tr>
@@ -292,41 +309,10 @@ function ListaView({ rows, profiles, operators, pricing, update }: {
                 </td>
                 <td className="p-3 text-xs">{r.type.replace("_", " ")}</td>
                 <td className="p-3">
-                  <input
-                    type="text"
-                    defaultValue={(value / 100).toFixed(2).replace(".", ",")}
-                    onBlur={(e) => {
-                      const c = cents(e.currentTarget.value);
-                      if (c !== value) update(r.id, { amount_cents: c });
-                    }}
-                    aria-label="Valor em reais"
-                    className="w-24 border border-input bg-transparent px-2 py-1 text-right type-data"
-                  />
+                  <span className="whitespace-nowrap type-data font-semibold">{brl(value)}</span>
                 </td>
                 <td className="p-3">
-                  <select value={r.payment_status} onChange={(e) => update(r.id, { payment_status: e.target.value })}
-                    className="rounded-md border border-input bg-background px-2 py-1">
-                    <option value="pendente">Pendente</option>
-                    <option value="pago">Pago</option>
-                    <option value="isento">Isento</option>
-                  </select>
-                </td>
-                <td className="p-3">
-                  <select value={r.payment_method ?? ""} onChange={(e) => update(r.id, { payment_method: e.target.value || null })}
-                    className="rounded-md border border-input bg-background px-2 py-1">
-                    <option value="">—</option>
-                    <option value="dinheiro">Dinheiro</option>
-                    <option value="pix">Pix</option>
-                    <option value="cartao">Cartão</option>
-                  </select>
-                </td>
-                <td className="p-3">
-                  <select disabled={r.payment_method !== "cartao"} value={r.card_operator_id ?? ""}
-                    onChange={(e) => update(r.id, { card_operator_id: e.target.value || null })}
-                    className="rounded-md border border-input bg-background px-2 py-1 disabled:opacity-40">
-                    <option value="">—</option>
-                    {operators.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                  </select>
+                  <PaymentStatus status={r.payment_status} />
                 </td>
                 <td className="p-3">
                   <select value={r.status} onChange={(e) => update(r.id, { status: e.target.value as any })}
@@ -359,7 +345,7 @@ function ListaView({ rows, profiles, operators, pricing, update }: {
             );
           })}
           {rows.length === 0 && (
-            <tr><td colSpan={9} className="p-8 text-center text-muted-foreground">Nenhuma reserva.</td></tr>
+            <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">Nenhuma reserva.</td></tr>
           )}
         </tbody>
       </table>
@@ -531,7 +517,7 @@ function AgendaView({ rows, profiles, pricing, selectedDay, setSelectedDay, upda
                         <span className="rounded bg-secondary px-1.5 py-0.5 type-micro text-foreground">{r.type.replace("_"," ")}</span>
                       </div>
                       <div className="mt-1 flex items-center justify-between">
-                        <span className="text-foreground/70 type-data">{brl(value)} · {r.payment_status}</span>
+                        <span className="text-foreground/70 type-data">{brl(value)} · {paymentStatusLabel(r.payment_status)}</span>
                         <div className="flex gap-1">
                           <button
                             onClick={() => update(r.id, { attended: true })}
