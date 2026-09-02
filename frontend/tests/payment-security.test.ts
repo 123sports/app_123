@@ -4,10 +4,21 @@ import test from "node:test";
 import { validateMercadoPagoWebhook } from "../src/lib/mercado-pago.server.ts";
 import {
   decidePaymentTransition,
+  effectiveCheckoutStatus,
   mercadoPagoPaymentStatus,
   safeMercadoPagoPayload,
   validateMercadoPagoPaymentForOrder,
 } from "../src/lib/payment-security.ts";
+
+test("shows expired and review Pix states consistently", () => {
+  const now = Date.parse("2026-09-02T12:00:00Z");
+  assert.equal(effectiveCheckoutStatus("pending", "2026-09-02T11:59:59Z", now), "expired");
+  assert.equal(effectiveCheckoutStatus("pending", "2026-09-02T12:05:00Z", now), "pending");
+  assert.equal(
+    effectiveCheckoutStatus("paid_needs_review", "2026-09-02T11:59:59Z", now),
+    "paid_needs_review",
+  );
+});
 
 test("normalizes Mercado Pago terminal and review statuses", () => {
   assert.equal(mercadoPagoPaymentStatus("approved", "accredited"), "paid");

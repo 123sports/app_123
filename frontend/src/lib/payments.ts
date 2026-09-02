@@ -7,6 +7,7 @@ import {
   createBookingPixCheckoutServer,
   syncBookingPixCheckoutServer,
 } from "@/lib/payments.functions";
+import { effectiveCheckoutStatus } from "@/lib/payment-security";
 
 export const LOCAL_PIX_HOLD_MINUTES = 30;
 
@@ -27,11 +28,19 @@ export type PixCheckout = {
   orderId: string;
   paymentId: string;
   bookingIds: string[];
+  sessionIds: string[];
   amountCents: number;
   pixCopyPaste: string;
   qrCodeDataUrl: string;
   expiresAt: string;
-  status: "pending" | "paid" | "expired" | "cancelled";
+  status:
+    | "pending"
+    | "paid"
+    | "expired"
+    | "cancelled"
+    | "failed"
+    | "refunded"
+    | "paid_needs_review";
   description: string;
 };
 
@@ -55,20 +64,33 @@ function fakePixPayload(orderId: string, amountCents: number) {
   ].join("|");
 }
 
-async function getBookingPrice(bookingType: string) {
+type BookingProduct = {
+  booking_type: string;
+  display_name: string;
+  price_cents: number;
+  student_capacity: number;
+  requires_professor: boolean;
+};
+
+async function getBookingProduct(bookingType: string): Promise<BookingProduct> {
   const { data, error } = await (supabase as any)
     .from("pricing")
-    .select("price_cents")
+    .select("booking_type, display_name, price_cents, student_capacity, requires_professor")
     .eq("booking_type", bookingType)
     .eq("active", true)
     .maybeSingle();
 
   if (error || !data) throw new Error("Preço indisponível para este tipo de reserva.");
-  const price = Number(data.price_cents);
-  if (!Number.isInteger(price) || price <= 0) {
+  const product = data as BookingProduct;
+  if (
+    !Number.isInteger(product.price_cents) ||
+    product.price_cents <= 0 ||
+    !Number.isInteger(product.student_capacity) ||
+    product.student_capacity < 1
+  ) {
     throw new Error("O preço configurado para esta reserva é inválido.");
   }
-  return price;
+  return product;
 }
 
 export async function createBookingPixCheckout(input: CreateBookingPixInput): Promise<PixCheckout> {
@@ -83,18 +105,69 @@ export async function createBookingPixCheckout(input: CreateBookingPixInput): Pr
   if (!hours.length) throw new Error("Selecione pelo menos um horário.");
   for (const hour of hours) assertBookingSchedule(input.bookingDate, hour);
 
-  const { data: occupied } = await (supabase as any)
-    .from("bookings_occupancy")
-    .select("start_hour")
-    .eq("booking_date", input.bookingDate)
-    .in("start_hour", hours);
-
-  if ((occupied ?? []).length) {
-    throw new Error("Um dos horários selecionados não está mais disponível.");
+  const product = await getBookingProduct(input.bookingType);
+  if (product.requires_professor && !input.professorId) {
+    throw new Error("Selecione o professor antes de continuar.");
+  }
+  if (!product.requires_professor && input.professorId) {
+    throw new Error("Este tipo de reserva não utiliza professor.");
+  }
+  if (product.requires_professor && hours.length !== 1) {
+    throw new Error("Selecione um horário por aula.");
   }
 
-  const unitAmountCents = await getBookingPrice(input.bookingType);
-  const amountCents = unitAmountCents * hours.length;
+  const [{ data: existingSessions }, { data: activeBookings }] = await Promise.all([
+    (supabase as any)
+      .from("reservation_sessions")
+      .select("*")
+      .eq("booking_date", input.bookingDate)
+      .eq("status", "open")
+      .in("start_hour", hours),
+    (supabase as any).from("bookings_occupancy").select("id, session_id, user_id"),
+  ]);
+
+  const createdSessions: any[] = [];
+  const sessionIds: string[] = [];
+  const unitAmounts: number[] = [];
+  for (const hour of hours) {
+    const existing = (existingSessions ?? []).find((session: any) => session.start_hour === hour);
+    if (existing) {
+      if (existing.product_type !== input.bookingType) {
+        throw new Error("Este horário já possui outro tipo de aula.");
+      }
+      if (existing.professor_id !== input.professorId) {
+        throw new Error("Este horário está vinculado a outro professor.");
+      }
+      const participants = (activeBookings ?? []).filter(
+        (booking: any) => booking.session_id === existing.id,
+      );
+      if (participants.some((booking: any) => booking.user_id === auth.user.id)) {
+        throw new Error("Você já possui uma vaga neste horário.");
+      }
+      if (participants.length >= existing.capacity) {
+        throw new Error("A última vaga deste horário já foi ocupada.");
+      }
+      sessionIds.push(existing.id);
+      unitAmounts.push(existing.unit_price_cents);
+      continue;
+    }
+
+    const id = uuid();
+    sessionIds.push(id);
+    unitAmounts.push(product.price_cents);
+    createdSessions.push({
+      id,
+      booking_date: input.bookingDate,
+      start_hour: hour,
+      professor_id: input.professorId,
+      product_type: input.bookingType,
+      capacity: product.student_capacity,
+      unit_price_cents: product.price_cents,
+      status: "open",
+    });
+  }
+
+  const amountCents = unitAmounts.reduce((total, amount) => total + amount, 0);
   const orderId = uuid();
   const paymentId = uuid();
   const bookingIds = hours.map(() => uuid());
@@ -106,7 +179,7 @@ export async function createBookingPixCheckout(input: CreateBookingPixInput): Pr
     width: 320,
     color: { dark: "#0b1712", light: "#ffffff" },
   });
-  const productLabel = BOOKING_TYPE_LABELS[input.bookingType] ?? "Reserva";
+  const productLabel = product.display_name || BOOKING_TYPE_LABELS[input.bookingType] || "Reserva";
   const description = `${productLabel} em ${input.bookingDate
     .split("-")
     .reverse()
@@ -114,6 +187,7 @@ export async function createBookingPixCheckout(input: CreateBookingPixInput): Pr
 
   const bookings = hours.map((hour, index) => ({
     id: bookingIds[index],
+    session_id: sessionIds[index],
     user_id: auth.user.id,
     professor_id: input.professorId,
     booking_date: input.bookingDate,
@@ -123,8 +197,8 @@ export async function createBookingPixCheckout(input: CreateBookingPixInput): Pr
     status: "pendente",
     payment_status: "pendente",
     payment_method: "pix",
-    price_cents: unitAmountCents,
-    amount_cents: unitAmountCents,
+    price_cents: unitAmounts[index],
+    amount_cents: unitAmounts[index],
     checkout_order_id: orderId,
     hold_expires_at: expiresAt,
     confirmed_at: null,
@@ -144,12 +218,13 @@ export async function createBookingPixCheckout(input: CreateBookingPixInput): Pr
     provider: "local",
     metadata: {
       booking_ids: bookingIds,
+      session_ids: sessionIds,
       booking_date: input.bookingDate,
       hours,
       booking_type: input.bookingType,
       professor_id: input.professorId,
       quantity: hours.length,
-      unit_amount_cents: unitAmountCents,
+      unit_amount_cents: hours.length === 1 ? unitAmounts[0] : null,
     },
   };
 
@@ -159,12 +234,13 @@ export async function createBookingPixCheckout(input: CreateBookingPixInput): Pr
     reference_id: bookingIds[index],
     description: `${productLabel} · ${input.bookingDate.split("-").reverse().join("/")} às ${String(hour).padStart(2, "0")}h`,
     quantity: 1,
-    unit_amount_cents: unitAmountCents,
-    total_amount_cents: unitAmountCents,
+    unit_amount_cents: unitAmounts[index],
+    total_amount_cents: unitAmounts[index],
     metadata: {
       booking_type: input.bookingType,
       booking_date: input.bookingDate,
       start_hour: hour,
+      session_id: sessionIds[index],
     },
   }));
 
@@ -185,6 +261,12 @@ export async function createBookingPixCheckout(input: CreateBookingPixInput): Pr
   };
 
   try {
+    if (createdSessions.length) {
+      const { error: sessionError } = await (supabase as any)
+        .from("reservation_sessions")
+        .insert(createdSessions);
+      if (sessionError) throw sessionError;
+    }
     const { error: orderError } = await (supabase as any).from("checkout_orders").insert(order);
     if (orderError) throw orderError;
     const { error: bookingError } = await (supabase as any).from("bookings").insert(bookings);
@@ -200,6 +282,15 @@ export async function createBookingPixCheckout(input: CreateBookingPixInput): Pr
     await (supabase as any).from("checkout_items").delete().eq("checkout_order_id", orderId);
     await (supabase as any).from("bookings").delete().eq("checkout_order_id", orderId);
     await (supabase as any).from("checkout_orders").delete().eq("id", orderId);
+    if (createdSessions.length) {
+      await (supabase as any)
+        .from("reservation_sessions")
+        .delete()
+        .in(
+          "id",
+          createdSessions.map((session) => session.id),
+        );
+    }
     throw error;
   }
 
@@ -207,6 +298,7 @@ export async function createBookingPixCheckout(input: CreateBookingPixInput): Pr
     orderId,
     paymentId,
     bookingIds,
+    sessionIds,
     amountCents,
     pixCopyPaste,
     qrCodeDataUrl,
@@ -252,19 +344,25 @@ export async function getPixCheckout(orderId: string): Promise<PixCheckout> {
     throw new Error("Cobrança Pix não encontrada.");
   }
 
-  const status =
-    order.status === "paid"
-      ? "paid"
-      : order.status === "cancelled"
-        ? "cancelled"
-        : order.status === "expired" || new Date(order.expires_at).getTime() <= Date.now()
-          ? "expired"
-          : "pending";
+  const knownStatuses = new Set<PixCheckout["status"]>([
+    "pending",
+    "paid",
+    "expired",
+    "cancelled",
+    "failed",
+    "refunded",
+    "paid_needs_review",
+  ]);
+  const storedStatus = knownStatuses.has(order.status as PixCheckout["status"])
+    ? (order.status as PixCheckout["status"])
+    : "paid_needs_review";
+  const status = effectiveCheckoutStatus(storedStatus, order.expires_at) as PixCheckout["status"];
 
   return {
     orderId: order.id,
     paymentId: payment.id,
     bookingIds: order.metadata?.booking_ids ?? [],
+    sessionIds: order.metadata?.session_ids ?? [],
     amountCents: order.amount_cents,
     pixCopyPaste: payment.qr_code ?? "",
     qrCodeDataUrl: payment.qr_code_base64
@@ -359,13 +457,40 @@ export async function approveLocalPixCheckout(checkout: PixCheckout): Promise<Pi
 
   const { data: linkedBookings } = await (supabase as any)
     .from("bookings")
-    .select("id, status, payment_status")
+    .select("id, session_id, booking_date, start_hour, type, professor_id, status, payment_status")
     .eq("checkout_order_id", checkout.orderId);
   if (
     (linkedBookings ?? []).length !== checkout.bookingIds.length ||
     (linkedBookings ?? []).some((booking: any) => booking.status === "cancelada")
   ) {
     throw new Error("A reserva vinculada a este Pix não está mais disponível.");
+  }
+
+  const linkedSessionIds = [
+    ...new Set((linkedBookings ?? []).map((booking: any) => booking.session_id).filter(Boolean)),
+  ];
+  const [{ data: linkedSessions }, { data: activeBookings }] = await Promise.all([
+    (supabase as any).from("reservation_sessions").select("*").in("id", linkedSessionIds),
+    (supabase as any).from("bookings_occupancy").select("id, session_id"),
+  ]);
+  const sessionMap = new Map((linkedSessions ?? []).map((session: any) => [session.id, session]));
+  const invalidSession = (linkedBookings ?? []).some((booking: any) => {
+    const session: any = sessionMap.get(booking.session_id);
+    const occupancy = (activeBookings ?? []).filter(
+      (active: any) => active.session_id === booking.session_id,
+    ).length;
+    return (
+      !session ||
+      session.status !== "open" ||
+      occupancy > session.capacity ||
+      session.booking_date !== booking.booking_date ||
+      session.start_hour !== booking.start_hour ||
+      session.product_type !== booking.type ||
+      session.professor_id !== booking.professor_id
+    );
+  });
+  if (invalidSession || sessionMap.size !== linkedSessionIds.length) {
+    throw new Error("A turma vinculada a este Pix não está mais disponível.");
   }
 
   const paidAt = new Date().toISOString();
@@ -390,10 +515,11 @@ export async function approveLocalPixCheckout(checkout: PixCheckout): Promise<Pi
 
   const { data: auth } = await supabase.auth.getUser();
   if (auth.user) {
+    const firstSession: any = sessionMap.get(linkedSessionIds[0]);
     await (supabase as any).from("notifications").insert({
       user_id: auth.user.id,
-      title: "Reserva confirmada",
-      body: `Tudo certo! O pagamento foi aprovado e sua reserva está confirmada: ${order.description}.`,
+      title: firstSession?.capacity > 1 ? "Vaga confirmada" : "Reserva confirmada",
+      body: `Tudo certo! O pagamento foi aprovado e confirmamos ${order.description}.`,
       kind: "booking_confirmed",
       related_booking_id: checkout.bookingIds[0] ?? null,
     });

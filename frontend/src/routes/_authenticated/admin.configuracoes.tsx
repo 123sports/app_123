@@ -1,6 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Loader2, Save, MessageCircle, Instagram, Facebook, Youtube, Music2, Globe, Eye, Shield } from "lucide-react";
+import {
+  CircleDollarSign,
+  Eye,
+  Facebook,
+  Globe,
+  Instagram,
+  Loader2,
+  MessageCircle,
+  Music2,
+  Save,
+  Shield,
+  Users,
+  Youtube,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
@@ -22,6 +35,16 @@ const PROF_FIELDS = [
 ] as const;
 type ProfField = (typeof PROF_FIELDS)[number]["key"];
 
+type BookingProduct = {
+  id: string;
+  booking_type: string;
+  display_name: string;
+  price_cents: number;
+  student_capacity: number;
+  requires_professor: boolean;
+  sort_order: number;
+  active: boolean;
+};
 
 type Socials = {
   instagram: string;
@@ -36,7 +59,13 @@ const SOCIAL_KEYS: (keyof Socials)[] = ["instagram", "facebook", "youtube", "tik
 function ConfigPage() {
   const [whatsapp, setWhatsapp] = useState("");
   const [whatsappMsg, setWhatsappMsg] = useState("");
-  const [socials, setSocials] = useState<Socials>({ instagram: "", facebook: "", youtube: "", tiktok: "", website: "" });
+  const [socials, setSocials] = useState<Socials>({
+    instagram: "",
+    facebook: "",
+    youtube: "",
+    tiktok: "",
+    website: "",
+  });
   const [profVis, setProfVis] = useState<Record<ProfField, boolean>>(
     Object.fromEntries(PROF_FIELDS.map((f) => [f.key, false])) as Record<ProfField, boolean>,
   );
@@ -44,16 +73,28 @@ function ConfigPage() {
   const [saving, setSaving] = useState(false);
   const [savingSocials, setSavingSocials] = useState(false);
   const [savingProf, setSavingProf] = useState(false);
-
+  const [products, setProducts] = useState<BookingProduct[]>([]);
+  const [productDrafts, setProductDrafts] = useState<Record<string, string>>({});
+  const [savingProductId, setSavingProductId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       const profKeys = PROF_FIELDS.map((f) => `prof_visible_${f.key}`);
-      const keys = ["whatsapp_number", "whatsapp_message", ...SOCIAL_KEYS.map((k) => `social_${k}`), ...profKeys];
-      const { data } = await (supabase as any)
-        .from("site_settings")
-        .select("key, value")
-        .in("key", keys);
+      const keys = [
+        "whatsapp_number",
+        "whatsapp_message",
+        ...SOCIAL_KEYS.map((k) => `social_${k}`),
+        ...profKeys,
+      ];
+      const [{ data }, { data: productRows }] = await Promise.all([
+        (supabase as any).from("site_settings").select("key, value").in("key", keys),
+        supabase
+          .from("pricing")
+          .select(
+            "id, booking_type, display_name, price_cents, student_capacity, requires_professor, sort_order, active",
+          )
+          .order("sort_order"),
+      ]);
       const map = Object.fromEntries(((data as any[]) ?? []).map((r) => [r.key, r.value ?? ""]));
       setWhatsapp(map["whatsapp_number"] ?? "");
       setWhatsappMsg(map["whatsapp_message"] ?? "");
@@ -69,10 +110,57 @@ function ConfigPage() {
           PROF_FIELDS.map((f) => [f.key, String(map[`prof_visible_${f.key}`] ?? "") === "true"]),
         ) as Record<ProfField, boolean>,
       );
+      const loadedProducts = (productRows ?? []) as BookingProduct[];
+      setProducts(loadedProducts);
+      setProductDrafts(
+        Object.fromEntries(
+          loadedProducts.map((product) => [
+            product.id,
+            (product.price_cents / 100).toFixed(2).replace(".", ","),
+          ]),
+        ),
+      );
       setLoading(false);
     })();
   }, []);
 
+  const saveProduct = async (product: BookingProduct) => {
+    playPop();
+    const rawValue = (productDrafts[product.id] ?? "").trim();
+    const normalized = rawValue.includes(",")
+      ? rawValue.replace(/\./g, "").replace(",", ".")
+      : rawValue;
+    const priceCents = Math.round(Number(normalized) * 100);
+    if (!Number.isInteger(priceCents) || priceCents <= 0 || priceCents > 10_000_000) {
+      toast.error("Informe um valor válido maior que zero.");
+      return;
+    }
+
+    setSavingProductId(product.id);
+    const { data, error } = await supabase
+      .from("pricing")
+      .update({ price_cents: priceCents, active: product.active })
+      .eq("id", product.id)
+      .select("id, price_cents, active")
+      .maybeSingle();
+    setSavingProductId(null);
+    if (error || !data) {
+      toast.error("Não foi possível salvar este produto.");
+      return;
+    }
+    setProducts((current) =>
+      current.map((item) =>
+        item.id === product.id
+          ? { ...item, price_cents: data.price_cents, active: data.active }
+          : item,
+      ),
+    );
+    setProductDrafts((current) => ({
+      ...current,
+      [product.id]: (data.price_cents / 100).toFixed(2).replace(".", ","),
+    }));
+    toast.success(`${product.display_name} atualizado`);
+  };
 
   const saveProfVis = async () => {
     playPop();
@@ -92,17 +180,17 @@ function ConfigPage() {
     toast.success("Permissões dos professores atualizadas");
   };
 
-
   const save = async () => {
     playPop();
     setSaving(true);
     const clean = whatsapp.replace(/[^\d+]/g, "");
-    const { error } = await (supabase as any)
-      .from("site_settings")
-      .upsert([
+    const { error } = await (supabase as any).from("site_settings").upsert(
+      [
         { key: "whatsapp_number", value: clean },
         { key: "whatsapp_message", value: whatsappMsg.trim() },
-      ], { onConflict: "key" });
+      ],
+      { onConflict: "key" },
+    );
     setSaving(false);
     if (error) {
       toast.error("Não foi possível salvar");
@@ -111,7 +199,6 @@ function ConfigPage() {
     setWhatsapp(clean);
     toast.success("WhatsApp atualizado");
   };
-
 
   const saveSocials = async () => {
     playPop();
@@ -154,6 +241,99 @@ function ConfigPage() {
         title="Configurações"
         subtitle="Dados públicos exibidos para os alunos e leads na landing page."
       />
+
+      <section className="plane">
+        <div className="mb-4 flex items-start gap-3">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+            <CircleDollarSign className="h-4 w-4" />
+          </span>
+          <div>
+            <h2 className="type-h3">Produtos e valores</h2>
+            <p className="type-micro text-muted-foreground">
+              Defina quanto cada aluno paga por uma vaga. Alterações não mudam reservas ou Pix já
+              criados.
+            </p>
+          </div>
+        </div>
+
+        <div className="divide-y divide-border border-y border-border">
+          {products
+            .filter(
+              (product) =>
+                product.booking_type !== "teste" ||
+                import.meta.env.VITE_ENABLE_TEST_BOOKING_TYPE === "true",
+            )
+            .map((product) => (
+              <div
+                key={product.id}
+                className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_150px_auto] sm:items-end"
+              >
+                <div className="min-w-0">
+                  <div className="font-semibold">{product.display_name}</div>
+                  <div className="mt-1 flex items-center gap-1.5 type-micro text-muted-foreground">
+                    <Users className="h-3.5 w-3.5" />
+                    {product.student_capacity === 1
+                      ? "1 aluno por horário"
+                      : `Até ${product.student_capacity} alunos por horário`}
+                  </div>
+                </div>
+                <label className="block">
+                  <span className="mb-1 block type-micro text-muted-foreground">
+                    Valor por aluno
+                  </span>
+                  <span className="flex items-center rounded-lg border border-input bg-background px-3">
+                    <span className="text-sm text-muted-foreground">R$</span>
+                    <input
+                      inputMode="decimal"
+                      value={productDrafts[product.id] ?? ""}
+                      onChange={(event) =>
+                        setProductDrafts((current) => ({
+                          ...current,
+                          [product.id]: event.target.value,
+                        }))
+                      }
+                      className="min-w-0 flex-1 bg-transparent px-2 py-2 text-right text-sm outline-none"
+                      aria-label={`Valor de ${product.display_name}`}
+                    />
+                  </span>
+                </label>
+                <div className="flex items-center justify-between gap-3 sm:justify-end">
+                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={product.active}
+                      onChange={(event) =>
+                        setProducts((current) =>
+                          current.map((item) =>
+                            item.id === product.id
+                              ? { ...item, active: event.target.checked }
+                              : item,
+                          ),
+                        )
+                      }
+                      className="h-4 w-4 accent-primary"
+                    />
+                    Disponível
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void saveProduct(product)}
+                    disabled={savingProductId === product.id}
+                    className="btn-bounce inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-60"
+                    title={`Salvar ${product.display_name}`}
+                    aria-label={`Salvar ${product.display_name}`}
+                  >
+                    {savingProductId === product.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            ))}
+        </div>
+      </section>
 
       <section className="plane">
         <div className="mb-3 flex items-center gap-2">
@@ -202,7 +382,6 @@ function ConfigPage() {
           Salvar WhatsApp
         </button>
       </section>
-
 
       <section className="plane">
         <div className="mb-3 flex items-center gap-2">
@@ -260,7 +439,11 @@ function ConfigPage() {
           disabled={savingSocials}
           className="btn-bounce mt-4 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
         >
-          {savingSocials ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {savingSocials ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
           Salvar redes sociais
         </button>
       </section>
@@ -273,14 +456,18 @@ function ConfigPage() {
           <div>
             <h2 className="type-h3">Dados visíveis para professores</h2>
             <p className="type-micro text-muted-foreground">
-              Por padrão, professores veem apenas nome, foto, nível e bio dos alunos. Marque abaixo o que deseja liberar.
+              Por padrão, professores veem apenas nome, foto, nível e bio dos alunos. Marque abaixo
+              o que deseja liberar.
             </p>
           </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           {PROF_FIELDS.map((f) => (
-            <label key={f.key} className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-secondary px-3 py-2.5 text-sm">
+            <label
+              key={f.key}
+              className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border bg-secondary px-3 py-2.5 text-sm"
+            >
               <span className="inline-flex items-center gap-2">
                 <Eye className="h-4 w-4 text-muted-foreground" /> {f.label}
               </span>
@@ -308,7 +495,11 @@ function ConfigPage() {
 }
 
 function SocialField({
-  icon, label, placeholder, value, onChange,
+  icon,
+  label,
+  placeholder,
+  value,
+  onChange,
 }: {
   icon: React.ReactNode;
   label: string;

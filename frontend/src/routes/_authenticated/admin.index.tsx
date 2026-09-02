@@ -1,7 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
-  CalendarCheck, Users, AlertCircle, Cake, QrCode, CircleCheckBig, Clock3, ShieldAlert,
+  CalendarCheck,
+  Users,
+  AlertCircle,
+  Cake,
+  QrCode,
+  CircleCheckBig,
+  Clock3,
+  ShieldAlert,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { brl } from "@/lib/money";
@@ -16,12 +23,14 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 
 type BookingRow = {
   id: string;
+  session_id: string | null;
   user_id: string;
   booking_date: string;
   start_hour: number;
   type: string;
   status: string;
   payment_status: string;
+  hold_expires_at: string | null;
 };
 
 type CheckoutOrderRow = {
@@ -51,15 +60,16 @@ function ProfessorDashboard() {
       const [{ data: rows }, { count }] = await Promise.all([
         supabase
           .from("bookings")
-          .select("id, user_id, booking_date, start_hour, type, status, payment_status")
+          .select(
+            "id, session_id, user_id, booking_date, start_hour, type, status, payment_status, hold_expires_at",
+          )
           .gte("booking_date", today)
-          .neq("status", "cancelada")
+          .eq("status", "confirmada")
+          .eq("payment_status", "pago")
           .order("booking_date")
           .order("start_hour")
           .limit(50),
-        (supabase as any)
-          .from("professor_feedback")
-          .select("id", { count: "exact", head: true }),
+        (supabase as any).from("professor_feedback").select("id", { count: "exact", head: true }),
       ]);
       const nextBookings = (rows ?? []) as BookingRow[];
       setBookings(nextBookings);
@@ -71,15 +81,20 @@ function ProfessorDashboard() {
           .from("profiles_public")
           .select("id, full_name")
           .in("id", ids);
-        setNames(Object.fromEntries(
-          (profiles ?? []).map((profile: any) => [profile.id, profile.full_name ?? "Aluno"]),
-        ));
+        setNames(
+          Object.fromEntries(
+            (profiles ?? []).map((profile: any) => [profile.id, profile.full_name ?? "Aluno"]),
+          ),
+        );
       }
     })();
   }, []);
 
   const today = format(new Date(), "yyyy-MM-dd");
   const todayBookings = bookings.filter((booking) => booking.booking_date === today);
+  const todayClasses = new Set(todayBookings.map((booking) => booking.session_id ?? booking.id))
+    .size;
+  const upcomingClasses = new Set(bookings.map((booking) => booking.session_id ?? booking.id)).size;
   const studentCount = new Set(bookings.map((booking) => booking.user_id)).size;
 
   return (
@@ -91,19 +106,47 @@ function ProfessorDashboard() {
       />
       <div className="stack-app">
         <section className="grid auto-rows-fr grid-cols-2 gap-4 lg:grid-cols-4">
-          <Stat to="/admin/reservas" icon={CalendarCheck} label="Aulas hoje" value={todayBookings.length} hint="Ver agenda" />
-          <Stat to="/admin/reservas" icon={CalendarCheck} label="Próximas aulas" value={bookings.length} hint="Ver reservas" />
-          <Stat to="/admin/alunos" icon={Users} label="Alunos vinculados" value={studentCount} hint="Ver alunos" />
-          <Stat to="/admin/feedbacks" icon={AlertCircle} label="Feedbacks" value={feedbacks} hint="Ver feedbacks" />
+          <Stat
+            to="/admin/reservas"
+            icon={CalendarCheck}
+            label="Aulas hoje"
+            value={todayClasses}
+            hint="Ver agenda"
+          />
+          <Stat
+            to="/admin/reservas"
+            icon={CalendarCheck}
+            label="Próximas aulas"
+            value={upcomingClasses}
+            hint="Ver reservas"
+          />
+          <Stat
+            to="/admin/alunos"
+            icon={Users}
+            label="Alunos vinculados"
+            value={studentCount}
+            hint="Ver alunos"
+          />
+          <Stat
+            to="/admin/feedbacks"
+            icon={AlertCircle}
+            label="Feedbacks"
+            value={feedbacks}
+            hint="Ver feedbacks"
+          />
         </section>
 
         <section className="plane">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="type-h3">Próximos horários</h2>
-            <Link to="/admin/reservas" className="type-small font-bold hover:underline">Agenda completa</Link>
+            <Link to="/admin/reservas" className="type-small font-bold hover:underline">
+              Agenda completa
+            </Link>
           </div>
           {bookings.length === 0 ? (
-            <p className="py-6 text-center type-small text-muted-foreground">Nenhuma aula agendada.</p>
+            <p className="py-6 text-center type-small text-muted-foreground">
+              Nenhuma aula agendada.
+            </p>
           ) : (
             <PersonList>
               {bookings.slice(0, 8).map((booking) => (
@@ -130,7 +173,9 @@ function AdminDashboard() {
   const [pendingOrders, setPendingOrders] = useState<CheckoutOrderRow[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [reviewCount, setReviewCount] = useState(0);
-  const [birthdays, setBirthdays] = useState<{ id: string; full_name: string | null; birth_date: string | null }[]>([]);
+  const [birthdays, setBirthdays] = useState<
+    { id: string; full_name: string | null; birth_date: string | null }[]
+  >([]);
   const [today] = useState(new Date());
 
   useEffect(() => {
@@ -150,25 +195,55 @@ function AdminDashboard() {
         { count: activePendingCount },
         { count: needsReview },
         { data: profs },
-      ] =
-        await Promise.all([
-          supabase.from("bookings").select("id, user_id, booking_date, start_hour, type, status, payment_status")
-            .gte("booking_date", from).lte("booking_date", to).neq("status", "cancelada"),
-          supabase.from("user_roles").select("user_id", { count: "exact", head: true }).eq("role", "aluno"),
-          supabase.from("checkout_orders")
-            .select("id, user_id, status, amount_cents, description, created_at, paid_at, expires_at")
-            .eq("status", "paid").gte("paid_at", paidFrom).lt("paid_at", paidUntil),
-          supabase.from("checkout_orders")
-            .select("id, user_id, status, amount_cents, description, created_at, paid_at, expires_at")
-            .eq("status", "pending").or(activePendingFilter).order("created_at", { ascending: false }).limit(10),
-          supabase.from("checkout_orders")
-            .select("id", { count: "exact", head: true }).eq("status", "pending").or(activePendingFilter),
-          supabase.from("checkout_orders")
-            .select("id", { count: "exact", head: true }).eq("status", "paid_needs_review"),
-          supabase.from("profiles").select("id, full_name, birth_date"),
-        ]);
+      ] = await Promise.all([
+        supabase
+          .from("bookings")
+          .select(
+            "id, session_id, user_id, booking_date, start_hour, type, status, payment_status, hold_expires_at",
+          )
+          .gte("booking_date", from)
+          .lte("booking_date", to)
+          .neq("status", "cancelada"),
+        supabase
+          .from("user_roles")
+          .select("user_id", { count: "exact", head: true })
+          .eq("role", "aluno"),
+        supabase
+          .from("checkout_orders")
+          .select("id, user_id, status, amount_cents, description, created_at, paid_at, expires_at")
+          .eq("status", "paid")
+          .gte("paid_at", paidFrom)
+          .lt("paid_at", paidUntil),
+        supabase
+          .from("checkout_orders")
+          .select("id, user_id, status, amount_cents, description, created_at, paid_at, expires_at")
+          .eq("status", "pending")
+          .or(activePendingFilter)
+          .order("created_at", { ascending: false })
+          .limit(10),
+        supabase
+          .from("checkout_orders")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending")
+          .or(activePendingFilter),
+        supabase
+          .from("checkout_orders")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "paid_needs_review"),
+        supabase.from("profiles").select("id, full_name, birth_date"),
+      ]);
 
-      setBookingsMonth(bs ?? []);
+      setBookingsMonth(
+        ((bs ?? []) as BookingRow[]).filter(
+          (booking) =>
+            booking.status === "concluida" ||
+            booking.payment_status === "pago" ||
+            booking.status === "confirmada" ||
+            (booking.payment_status === "pendente" &&
+              Boolean(booking.hold_expires_at) &&
+              new Date(booking.hold_expires_at as string).getTime() > Date.now()),
+        ),
+      );
       setStudents(stCount ?? 0);
       setPaidOrders((paid ?? []) as CheckoutOrderRow[]);
       setPendingOrders((pending ?? []) as CheckoutOrderRow[]);
@@ -193,8 +268,16 @@ function AdminDashboard() {
     const refreshInterval = window.setInterval(() => void load(), 60_000);
     const channel = supabase
       .channel("admin-dashboard")
-      .on("postgres_changes", { event: "*", schema: "public", table: "checkout_orders" }, () => void load())
-      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => void load())
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "checkout_orders" },
+        () => void load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings" },
+        () => void load(),
+      )
       .subscribe();
 
     return () => {
@@ -204,6 +287,8 @@ function AdminDashboard() {
   }, [today]);
 
   const pixRevenue = paidOrders.reduce((sum, order) => sum + order.amount_cents, 0);
+  const classesThisMonth = new Set(bookingsMonth.map((booking) => booking.session_id ?? booking.id))
+    .size;
 
   return (
     <>
@@ -215,10 +300,34 @@ function AdminDashboard() {
 
       <div className="stack-app">
         <section className="grid auto-rows-fr grid-cols-2 gap-4 lg:grid-cols-3">
-          <Stat to="/admin/reservas" icon={CalendarCheck} label="Reservas no mês" value={bookingsMonth.length} hint="Ver todas" />
-          <Stat to="/admin/pagamentos" icon={QrCode} label="Pix recebido no mês" value={brl(pixRevenue)} hint="Ver pagamentos" />
-          <Stat to="/admin/pagamentos" icon={CircleCheckBig} label="Pix confirmados no mês" value={paidOrders.length} hint="Ver pagos" />
-          <Stat to="/admin/pagamentos" icon={Clock3} label="Aguardando Pix" value={pendingCount} hint="Acompanhar" />
+          <Stat
+            to="/admin/reservas"
+            icon={CalendarCheck}
+            label="Aulas no mês"
+            value={classesThisMonth}
+            hint={`${bookingsMonth.length} vagas`}
+          />
+          <Stat
+            to="/admin/pagamentos"
+            icon={QrCode}
+            label="Pix recebido no mês"
+            value={brl(pixRevenue)}
+            hint="Ver pagamentos"
+          />
+          <Stat
+            to="/admin/pagamentos"
+            icon={CircleCheckBig}
+            label="Pix confirmados no mês"
+            value={paidOrders.length}
+            hint="Ver pagos"
+          />
+          <Stat
+            to="/admin/pagamentos"
+            icon={Clock3}
+            label="Aguardando Pix"
+            value={pendingCount}
+            hint="Acompanhar"
+          />
           <Stat to="/admin/alunos" icon={Users} label="Alunos" value={students} hint="Ver lista" />
           <Stat
             to="/admin/pagamentos"
@@ -236,10 +345,14 @@ function AdminDashboard() {
               <h2 className="type-h3 flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-foreground" /> Aguardando Pix
               </h2>
-              <Link to="/admin/pagamentos" className="type-small font-bold hover:underline">Ver pagamentos</Link>
+              <Link to="/admin/pagamentos" className="type-small font-bold hover:underline">
+                Ver pagamentos
+              </Link>
             </div>
             {pendingOrders.length === 0 ? (
-              <p className="py-6 text-center type-small text-muted-foreground">Nenhum Pix aguardando pagamento.</p>
+              <p className="py-6 text-center type-small text-muted-foreground">
+                Nenhum Pix aguardando pagamento.
+              </p>
             ) : (
               <ul className="flex flex-col">
                 {pendingOrders.map((order) => (
@@ -252,7 +365,9 @@ function AdminDashboard() {
                       className="group -mx-5 flex items-center justify-between px-5 py-3 transition-colors hover:bg-accent"
                     >
                       <span className="min-w-0 pr-3">
-                        <span className="block truncate type-small font-bold">{order.description}</span>
+                        <span className="block truncate type-small font-bold">
+                          {order.description}
+                        </span>
                         <span className="block type-micro text-muted-foreground">
                           Gerado em {format(new Date(order.created_at), "dd/MM 'às' HH:mm")}
                         </span>
@@ -272,7 +387,9 @@ function AdminDashboard() {
               <Cake className="h-4 w-4 text-foreground" /> Aniversariantes (15 dias)
             </h2>
             {birthdays.length === 0 ? (
-              <p className="py-4 text-center type-small text-muted-foreground">Ninguém por enquanto.</p>
+              <p className="py-4 text-center type-small text-muted-foreground">
+                Ninguém por enquanto.
+              </p>
             ) : (
               <PersonList>
                 {birthdays.map((b) => (
@@ -298,7 +415,13 @@ function AdminDashboard() {
 }
 
 function Stat({
-  to, search, icon: Icon, label, value, accent, hint,
+  to,
+  search,
+  icon: Icon,
+  label,
+  value,
+  accent,
+  hint,
 }: {
   to: string;
   search?: Record<string, string>;

@@ -4,11 +4,8 @@ import { CheckCircle2, Clock3, Loader2, QrCode, ReceiptText } from "lucide-react
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { brl } from "@/lib/money";
-import {
-  cleanupExpiredLocalPixCheckouts,
-  getPixCheckout,
-  type PixCheckout,
-} from "@/lib/payments";
+import { effectiveCheckoutStatus } from "@/lib/payment-security";
+import { cleanupExpiredLocalPixCheckouts, getPixCheckout, type PixCheckout } from "@/lib/payments";
 import { PageHeader } from "@/components/PageHeader";
 import { PixCheckoutDialog } from "@/components/PixCheckoutDialog";
 import { Button } from "@/components/ui/button";
@@ -51,7 +48,20 @@ function StudentPayments() {
     void load();
     const handleLocalChange = () => void load();
     window.addEventListener("on-tennis-local-data-change", handleLocalChange);
-    return () => window.removeEventListener("on-tennis-local-data-change", handleLocalChange);
+    const channel = supabase
+      .channel("student-payments")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "checkout_orders" },
+        handleLocalChange,
+      )
+      .subscribe();
+    const refreshInterval = window.setInterval(handleLocalChange, 30_000);
+    return () => {
+      window.removeEventListener("on-tennis-local-data-change", handleLocalChange);
+      window.clearInterval(refreshInterval);
+      void supabase.removeChannel(channel);
+    };
   }, []);
 
   const openCheckout = async (orderId: string) => {
@@ -65,13 +75,17 @@ function StudentPayments() {
     }
   };
 
-  const counts = useMemo(() => ({
-    paid: orders.filter((order) => order.status === "paid").length,
-    pending: orders.filter((order) => (
-      order.status === "pending"
-      && (!order.expires_at || new Date(order.expires_at).getTime() > Date.now())
-    )).length,
-  }), [orders]);
+  const counts = useMemo(
+    () => ({
+      paid: orders.filter((order) => order.status === "paid").length,
+      pending: orders.filter(
+        (order) =>
+          order.status === "pending" &&
+          (!order.expires_at || new Date(order.expires_at).getTime() > Date.now()),
+      ).length,
+    }),
+    [orders],
+  );
 
   return (
     <div className="stack-app animate-float-in">
@@ -99,9 +113,7 @@ function StudentPayments() {
         ) : (
           <ul className="divide-y divide-border">
             {orders.map((order) => {
-              const expired = order.status === "expired"
-                || (order.status === "pending" && order.expires_at && new Date(order.expires_at).getTime() <= Date.now());
-              const status = expired ? "expired" : order.status;
+              const status = effectiveCheckoutStatus(order.status, order.expires_at);
               return (
                 <li key={order.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
                   <div className="min-w-0 flex-1">
@@ -114,8 +126,16 @@ function StudentPayments() {
                     <strong className="type-data">{brl(order.amount_cents)}</strong>
                     <Status status={status} />
                     {status === "pending" && (
-                      <Button size="sm" onClick={() => void openCheckout(order.id)} disabled={opening === order.id}>
-                        {opening === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
+                      <Button
+                        size="sm"
+                        onClick={() => void openCheckout(order.id)}
+                        disabled={opening === order.id}
+                      >
+                        {opening === order.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <QrCode className="h-4 w-4" />
+                        )}
                         Pagar
                       </Button>
                     )}
@@ -170,7 +190,9 @@ function Status({ status }: { status: string }) {
     paid_needs_review: "Em análise",
   };
   return (
-    <span className={`px-2 py-1 text-xs font-medium ${styles[status] ?? "bg-muted text-muted-foreground"}`}>
+    <span
+      className={`px-2 py-1 text-xs font-medium ${styles[status] ?? "bg-muted text-muted-foreground"}`}
+    >
       {labels[status] ?? status}
     </span>
   );

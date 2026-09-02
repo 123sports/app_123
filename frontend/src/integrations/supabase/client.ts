@@ -28,6 +28,8 @@ const localSession = {
 const LOCAL_SESSION_KEY = 'on_tennis_local_supabase_session';
 const LOCAL_PROFILE_KEY = 'on_tennis_local_profile';
 const LOCAL_BOOKINGS_KEY = 'on_tennis_local_bookings';
+const LOCAL_RESERVATION_SESSIONS_KEY = 'on_tennis_local_reservation_sessions';
+const LOCAL_PRICING_KEY = 'on_tennis_local_pricing';
 const LOCAL_CHECKOUT_ORDERS_KEY = 'on_tennis_local_checkout_orders';
 const LOCAL_CHECKOUT_ITEMS_KEY = 'on_tennis_local_checkout_items';
 const LOCAL_PAYMENT_ATTEMPTS_KEY = 'on_tennis_local_payment_attempts';
@@ -65,6 +67,7 @@ const defaultLocalProfile = {
 const localBookings = [
   {
     id: 'local-booking-1',
+    session_id: 'local-session-1',
     user_id: localUser.id,
     professor_id: localUser.id,
     booking_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
@@ -72,7 +75,7 @@ const localBookings = [
     type: 'aula_individual',
     status: 'confirmada',
     payment_status: 'pago',
-    payment_method: 'cartao',
+    payment_method: 'pix',
     amount_cents: 12000,
     confirmed_at: null,
     attended: false,
@@ -83,6 +86,7 @@ const localBookings = [
   },
   {
     id: 'local-booking-2',
+    session_id: 'local-session-2',
     user_id: localUser.id,
     professor_id: null,
     booking_date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
@@ -90,7 +94,7 @@ const localBookings = [
     type: 'quadra_livre',
     status: 'confirmada',
     payment_status: 'pago',
-    payment_method: 'dinheiro',
+    payment_method: 'pix',
     amount_cents: 8000,
     confirmed_at: new Date().toISOString(),
     attended: true,
@@ -101,18 +105,100 @@ const localBookings = [
   },
 ];
 
+const localReservationSessions = [
+  {
+    id: 'local-session-1',
+    booking_date: localBookings[0].booking_date,
+    start_hour: 9,
+    professor_id: localUser.id,
+    product_type: 'aula_individual',
+    capacity: 1,
+    unit_price_cents: 12000,
+    status: 'open',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'local-session-2',
+    booking_date: localBookings[1].booking_date,
+    start_hour: 18,
+    professor_id: null,
+    product_type: 'quadra_livre',
+    capacity: 1,
+    unit_price_cents: 8000,
+    status: 'open',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
+
 const localPricing = [
-  { id: 'local-price-court', booking_type: 'quadra_livre', price_cents: 6000, active: true },
-  { id: 'local-price-individual', booking_type: 'aula_individual', price_cents: 12000, active: true },
-  { id: 'local-price-double', booking_type: 'aula_dupla', price_cents: 8000, active: true },
-  { id: 'local-price-trio', booking_type: 'aula_trio', price_cents: 6500, active: true },
-  { id: 'local-price-quartet', booking_type: 'aula_quarteto', price_cents: 5500, active: true },
-  { id: 'local-price-test', booking_type: 'teste', price_cents: 100, active: true },
+  {
+    id: 'local-price-court',
+    booking_type: 'quadra_livre',
+    display_name: 'Quadra livre',
+    price_cents: 6000,
+    student_capacity: 1,
+    requires_professor: false,
+    sort_order: 10,
+    active: true,
+  },
+  {
+    id: 'local-price-individual',
+    booking_type: 'aula_individual',
+    display_name: 'Aula individual',
+    price_cents: 12000,
+    student_capacity: 1,
+    requires_professor: true,
+    sort_order: 20,
+    active: true,
+  },
+  {
+    id: 'local-price-double',
+    booking_type: 'aula_dupla',
+    display_name: 'Aula em dupla',
+    price_cents: 8000,
+    student_capacity: 2,
+    requires_professor: true,
+    sort_order: 30,
+    active: true,
+  },
+  {
+    id: 'local-price-trio',
+    booking_type: 'aula_trio',
+    display_name: 'Aula em trio',
+    price_cents: 6500,
+    student_capacity: 3,
+    requires_professor: true,
+    sort_order: 40,
+    active: true,
+  },
+  {
+    id: 'local-price-quartet',
+    booking_type: 'aula_quarteto',
+    display_name: 'Aula em quarteto',
+    price_cents: 5500,
+    student_capacity: 4,
+    requires_professor: true,
+    sort_order: 50,
+    active: true,
+  },
+  {
+    id: 'local-price-test',
+    booking_type: 'teste',
+    display_name: 'Teste',
+    price_cents: 100,
+    student_capacity: 1,
+    requires_professor: false,
+    sort_order: 90,
+    active: true,
+  },
 ];
 
 function hasSupabaseConfig() {
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+  const SUPABASE_PUBLISHABLE_KEY =
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
   return Boolean(SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY);
 }
 
@@ -187,6 +273,10 @@ function localStorageKeyForTable(table: string) {
   switch (table) {
     case 'bookings':
       return LOCAL_BOOKINGS_KEY;
+    case 'reservation_sessions':
+      return LOCAL_RESERVATION_SESSIONS_KEY;
+    case 'pricing':
+      return LOCAL_PRICING_KEY;
     case 'checkout_orders':
       return LOCAL_CHECKOUT_ORDERS_KEY;
     case 'checkout_items':
@@ -205,9 +295,10 @@ function localStorageKeyForTable(table: string) {
 }
 
 function localId(prefix: string) {
-  const suffix = typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const suffix =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `${prefix}-${suffix}`;
 }
 
@@ -215,6 +306,8 @@ function normalizeLocalRow(table: string, row: Record<string, any>) {
   const now = new Date().toISOString();
   const prefixes: Record<string, string> = {
     bookings: 'local-booking',
+    reservation_sessions: 'local-session',
+    pricing: 'local-price',
     checkout_orders: 'local-checkout',
     checkout_items: 'local-checkout-item',
     payment_attempts: 'local-payment',
@@ -253,16 +346,60 @@ function localRowsFor(table: string): any[] {
       ];
     case 'bookings':
       return readLocalCollection(LOCAL_BOOKINGS_KEY, localBookings);
+    case 'reservation_sessions':
+      return readLocalCollection(LOCAL_RESERVATION_SESSIONS_KEY, localReservationSessions);
     case 'bookings_occupancy': {
       const now = Date.now();
       return readLocalCollection(LOCAL_BOOKINGS_KEY, localBookings).filter((booking: any) => {
-        if (booking.status === 'cancelada') return false;
+        if (!['pendente', 'confirmada'].includes(booking.status)) return false;
         if (booking.payment_status === 'pago' || booking.status === 'confirmada') return true;
         return booking.hold_expires_at && new Date(booking.hold_expires_at).getTime() > now;
       });
     }
+    case 'reservation_session_availability': {
+      const now = Date.now();
+      const bookings = readLocalCollection(LOCAL_BOOKINGS_KEY, localBookings);
+      return readLocalCollection(LOCAL_RESERVATION_SESSIONS_KEY, localReservationSessions)
+        .filter((session: any) => session.status === 'open')
+        .map((session: any) => {
+          const activeBookings = bookings.filter(
+            (booking: any) =>
+              booking.session_id === session.id &&
+              ['pendente', 'confirmada'].includes(booking.status) &&
+              (booking.payment_status === 'pago' ||
+                booking.status === 'confirmada' ||
+                (booking.payment_status === 'pendente' &&
+                  booking.hold_expires_at &&
+                  new Date(booking.hold_expires_at).getTime() > now)),
+          );
+          const mine = activeBookings.find((booking: any) => booking.user_id === localUser.id);
+          const product = readLocalCollection(LOCAL_PRICING_KEY, localPricing).find(
+            (item: any) => item.booking_type === session.product_type,
+          );
+          return {
+            session_id: session.id,
+            booking_date: session.booking_date,
+            start_hour: session.start_hour,
+            professor_id: session.professor_id,
+            product_type: session.product_type,
+            display_name: product?.display_name ?? 'Aula',
+            capacity: session.capacity,
+            unit_price_cents: session.unit_price_cents,
+            occupied_seats: activeBookings.length,
+            available_seats: Math.max(0, session.capacity - activeBookings.length),
+            is_full: activeBookings.length >= session.capacity,
+            my_booking_id: mine?.id ?? null,
+            my_booking_status: mine?.status ?? null,
+            my_payment_status: mine?.payment_status ?? null,
+            my_checkout_order_id: mine?.checkout_order_id ?? null,
+            my_hold_expires_at: mine?.hold_expires_at ?? null,
+            updated_at: session.updated_at,
+          };
+        })
+        .filter((session: any) => session.occupied_seats > 0);
+    }
     case 'pricing':
-      return localPricing;
+      return readLocalCollection(LOCAL_PRICING_KEY, localPricing);
     case 'checkout_orders':
       return readLocalCollection(LOCAL_CHECKOUT_ORDERS_KEY);
     case 'checkout_items':
@@ -276,23 +413,27 @@ function localRowsFor(table: string): any[] {
     case 'staff_invites':
       return readLocalCollection(LOCAL_STAFF_INVITES_KEY);
     case 'rpc:list_active_professors':
-      return [{
-        id: localUser.id,
-        full_name: localUser.user_metadata.full_name,
-        avatar_url: null,
-      }];
+      return [
+        {
+          id: localUser.id,
+          full_name: localUser.user_metadata.full_name,
+          avatar_url: null,
+        },
+      ];
     case 'rpc:list_students_for_staff': {
       const bookings = readLocalCollection(LOCAL_BOOKINGS_KEY, localBookings);
-      return [{
-        id: localUser.id,
-        full_name: localUser.user_metadata.full_name,
-        phone: defaultLocalProfile.phone,
-        birth_date: defaultLocalProfile.birth_date,
-        skill_level: defaultLocalProfile.skill_level,
-        bookings: bookings.length,
-        attended: bookings.filter((booking: any) => booking.attended === true).length,
-        missed: bookings.filter((booking: any) => booking.attended === false).length,
-      }];
+      return [
+        {
+          id: localUser.id,
+          full_name: localUser.user_metadata.full_name,
+          phone: defaultLocalProfile.phone,
+          birth_date: defaultLocalProfile.birth_date,
+          skill_level: defaultLocalProfile.skill_level,
+          bookings: bookings.length,
+          attended: bookings.filter((booking: any) => booking.attended === true).length,
+          missed: bookings.filter((booking: any) => booking.attended === false).length,
+        },
+      ];
     }
     case 'rpc:get_student_for_professor':
       return [readLocalProfile()];
@@ -348,8 +489,9 @@ function createLocalQueryBuilder(table: string) {
     if (!storageKey) return;
 
     const current = localRowsFor(table);
-    const payloadRows = (Array.isArray(writePayload) ? writePayload : [writePayload])
-      .filter((item): item is Record<string, any> => Boolean(item && typeof item === 'object'));
+    const payloadRows = (Array.isArray(writePayload) ? writePayload : [writePayload]).filter(
+      (item): item is Record<string, any> => Boolean(item && typeof item === 'object'),
+    );
 
     if (writeOperation === 'insert') {
       writeRows = payloadRows.map((row) => normalizeLocalRow(table, row));
@@ -362,7 +504,12 @@ function createLocalQueryBuilder(table: string) {
       writeRows = [];
       const next = current.map((row) => {
         if (!matches(row)) return row;
-        const updated = normalizeLocalRow(table, { ...row, ...patch, id: row.id, created_at: row.created_at });
+        const updated = normalizeLocalRow(table, {
+          ...row,
+          ...patch,
+          id: row.id,
+          created_at: row.created_at,
+        });
         writeRows!.push(updated);
         return updated;
       });
@@ -372,15 +519,18 @@ function createLocalQueryBuilder(table: string) {
 
     if (writeOperation === 'delete') {
       writeRows = current.filter(matches);
-      writeLocalCollection(storageKey, current.filter((row) => !matches(row)));
+      writeLocalCollection(
+        storageKey,
+        current.filter((row) => !matches(row)),
+      );
       return;
     }
 
     if (writeOperation === 'upsert') {
       const next = [...current];
       writeRows = payloadRows.map((row) => {
-        const index = next.findIndex((item) =>
-          (row.id && item.id === row.id) || (row.key && item.key === row.key),
+        const index = next.findIndex(
+          (item) => (row.id && item.id === row.id) || (row.key && item.key === row.key),
         );
         const normalized = normalizeLocalRow(table, index >= 0 ? { ...next[index], ...row } : row);
         if (index >= 0) next[index] = normalized;
@@ -481,8 +631,10 @@ function createLocalQueryBuilder(table: string) {
       singleResult = true;
       return builder;
     },
-    then: (resolve: (value: ReturnType<typeof result>) => unknown, reject?: (reason: unknown) => unknown) =>
-      Promise.resolve(result()).then(resolve, reject),
+    then: (
+      resolve: (value: ReturnType<typeof result>) => unknown,
+      reject?: (reason: unknown) => unknown,
+    ) => Promise.resolve(result()).then(resolve, reject),
     catch: (reject: (reason: unknown) => unknown) => Promise.resolve(result()).catch(reject),
     finally: (onFinally: () => void) => Promise.resolve(result()).finally(onFinally),
   };
@@ -502,7 +654,10 @@ function createLocalSupabaseClient() {
         const session = readLocalSession();
         return session
           ? { data: { user: session.user }, error: null }
-          : { data: { user: null }, error: { message: 'Local user is not signed in.', name: 'LocalAuthRequired' } };
+          : {
+              data: { user: null },
+              error: { message: 'Local user is not signed in.', name: 'LocalAuthRequired' },
+            };
       },
       signUp: async () => {
         writeLocalSession(true);
@@ -533,7 +688,9 @@ function createLocalSupabaseClient() {
       },
       resetPasswordForEmail: async () => ({ data: {}, error: localSupabaseError }),
       updateUser: async () => ({ data: { user: localUser }, error: localSupabaseError }),
-      onAuthStateChange: (callback: (event: string, session: typeof localSession | null) => void) => {
+      onAuthStateChange: (
+        callback: (event: string, session: typeof localSession | null) => void,
+      ) => {
         queueMicrotask(() => callback('INITIAL_SESSION', readLocalSession()));
         return {
           data: {
@@ -583,7 +740,8 @@ function createSupabaseClient() {
   // Use import.meta.env for client-side (Vite build-time replacement)
   // Fall back to process.env for SSR (server-side rendering)
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+  const SUPABASE_PUBLISHABLE_KEY =
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     if (!canUseLocalSupabaseMode()) {
@@ -599,7 +757,7 @@ function createSupabaseClient() {
       storage: typeof window !== 'undefined' ? localStorage : undefined,
       persistSession: true,
       autoRefreshToken: true,
-    }
+    },
   });
 }
 

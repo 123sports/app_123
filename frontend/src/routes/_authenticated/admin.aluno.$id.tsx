@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Phone, AlertTriangle, Cake, Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { brl } from "@/lib/money";
+import { effectiveCheckoutStatus } from "@/lib/payment-security";
 import { format } from "date-fns";
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
@@ -31,12 +32,14 @@ function AlunoDetalhe() {
   const [avatar, setAvatar] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
+    const load = async () => {
       const [{ data: p }, { data: bs }, { data: ev }] = await Promise.all([
         (supabase as any).rpc("get_student_for_professor", { _student_id: id }),
         supabase
           .from("bookings")
-          .select("id, booking_date, start_hour, type, status, payment_status, amount_cents, attended")
+          .select(
+            "id, booking_date, start_hour, type, status, payment_status, hold_expires_at, amount_cents, attended",
+          )
           .eq("user_id", id)
           .order("booking_date", { ascending: false }),
         staffRole === "admin"
@@ -44,24 +47,56 @@ function AlunoDetalhe() {
           : Promise.resolve({ data: [] }),
       ]);
       setProfile(p);
-      setBookings(bs ?? []);
+      setBookings(
+        (bs ?? []).map((booking: any) => ({
+          ...booking,
+          payment_status:
+            booking.payment_status === "pendente"
+              ? effectiveCheckoutStatus("pending", booking.hold_expires_at) === "expired"
+                ? "expirado"
+                : "pendente"
+              : booking.payment_status,
+        })),
+      );
       setPoints((ev ?? []).reduce((s: number, e: any) => s + (e.points ?? 0), 0));
       if (p?.avatar_url) {
-        const { data: signed } = await supabase.storage.from("avatars").createSignedUrl(p.avatar_url, 3600);
+        const { data: signed } = await supabase.storage
+          .from("avatars")
+          .createSignedUrl(p.avatar_url, 3600);
         setAvatar(signed?.signedUrl ?? null);
       }
-    })();
+    };
+
+    void load();
+    const channel = supabase
+      .channel(`student-detail-bookings-${id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings" },
+        () => void load(),
+      )
+      .subscribe();
+    const refreshInterval = window.setInterval(() => void load(), 30_000);
+    return () => {
+      window.clearInterval(refreshInterval);
+      void supabase.removeChannel(channel);
+    };
   }, [id, staffRole]);
 
   const total = bookings.length;
   const attended = bookings.filter((b) => b.attended === true).length;
   const missed = bookings.filter((b) => b.attended === false).length;
   const unpaid = bookings.filter((b) => b.payment_status === "pendente").length;
-  const revenue = bookings.filter((b) => b.payment_status === "pago").reduce((s, b) => s + (b.amount_cents ?? 0), 0);
+  const revenue = bookings
+    .filter((b) => b.payment_status === "pago")
+    .reduce((s, b) => s + (b.amount_cents ?? 0), 0);
 
   return (
     <div className="space-y-4">
-      <Link to="/admin/alunos" className="btn-bounce inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+      <Link
+        to="/admin/alunos"
+        className="btn-bounce inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+      >
         <ArrowLeft className="h-4 w-4" /> Alunos
       </Link>
 
@@ -71,14 +106,35 @@ function AlunoDetalhe() {
         <>
           <header className="flex flex-wrap items-center gap-4 py-2">
             <div className="h-20 w-20 overflow-hidden rounded-full border-2 border-primary/40 bg-primary text-2xl font-bold text-primary-foreground flex items-center justify-center">
-              {avatar ? <img src={avatar} alt={profile.full_name ?? ""} className="h-full w-full object-cover" />
-                : (profile.full_name ?? "?").split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase()}
+              {avatar ? (
+                <img
+                  src={avatar}
+                  alt={profile.full_name ?? ""}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                (profile.full_name ?? "?")
+                  .split(" ")
+                  .map((n: string) => n[0])
+                  .slice(0, 2)
+                  .join("")
+                  .toUpperCase()
+              )}
             </div>
             <div className="flex-1">
               <h1 className="type-h2">{profile.full_name ?? "Sem nome"}</h1>
               <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 type-small text-muted-foreground">
-                {profile.phone && <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" /> {profile.phone}</span>}
-                {profile.birth_date && <span className="inline-flex items-center gap-1"><Cake className="h-3 w-3" /> {format(new Date(profile.birth_date + "T00:00:00"), "dd/MM/yyyy")}</span>}
+                {profile.phone && (
+                  <span className="inline-flex items-center gap-1">
+                    <Phone className="h-3 w-3" /> {profile.phone}
+                  </span>
+                )}
+                {profile.birth_date && (
+                  <span className="inline-flex items-center gap-1">
+                    <Cake className="h-3 w-3" />{" "}
+                    {format(new Date(profile.birth_date + "T00:00:00"), "dd/MM/yyyy")}
+                  </span>
+                )}
                 {profile.skill_level && <span>· {profile.skill_level}</span>}
               </div>
             </div>
@@ -92,7 +148,9 @@ function AlunoDetalhe() {
             )}
           </header>
 
-          <section className={`grid auto-rows-fr gap-4 sm:grid-cols-2 ${staffRole === "admin" ? "lg:grid-cols-5" : "lg:grid-cols-3"}`}>
+          <section
+            className={`grid auto-rows-fr gap-4 sm:grid-cols-2 ${staffRole === "admin" ? "lg:grid-cols-5" : "lg:grid-cols-3"}`}
+          >
             <Mini label="Reservas" value={total} />
             <Mini label="Presenças" value={attended} accent="good" />
             <Mini label="Faltas" value={missed} accent="bad" />
@@ -129,17 +187,37 @@ function AlunoDetalhe() {
               ) : (
                 <ul className="max-h-80 space-y-2 overflow-y-auto pr-1 text-sm">
                   {bookings.map((b) => (
-                    <li key={b.id} className="flex items-center justify-between bg-secondary px-3 py-2">
+                    <li
+                      key={b.id}
+                      className="flex items-center justify-between bg-secondary px-3 py-2"
+                    >
                       <div>
-                        <div className="type-data font-medium">{format(new Date(b.booking_date + "T00:00:00"), "dd/MM/yy")} · {String(b.start_hour).padStart(2, "0")}:00</div>
-                        <div className="type-micro text-muted-foreground">{b.type.replace("_", " ")}</div>
+                        <div className="type-data font-medium">
+                          {format(new Date(b.booking_date + "T00:00:00"), "dd/MM/yy")} ·{" "}
+                          {String(b.start_hour).padStart(2, "0")}:00
+                        </div>
+                        <div className="type-micro text-muted-foreground">
+                          {b.type.replace("_", " ")}
+                        </div>
                       </div>
                       <div className="text-right">
-                        <Badge color={b.payment_status === "pago" ? "good" : b.payment_status === "pendente" ? "warn" : "neutral"}>
+                        <Badge
+                          color={
+                            b.payment_status === "pago"
+                              ? "good"
+                              : b.payment_status === "pendente"
+                                ? "warn"
+                                : "neutral"
+                          }
+                        >
                           {paymentStatusLabel(b.payment_status)}
                         </Badge>
-                        {b.attended === true && <span className="ml-1 type-micro text-primary">presente</span>}
-                        {b.attended === false && <span className="ml-1 type-micro text-destructive">faltou</span>}
+                        {b.attended === true && (
+                          <span className="ml-1 type-micro text-primary">presente</span>
+                        )}
+                        {b.attended === false && (
+                          <span className="ml-1 type-micro text-destructive">faltou</span>
+                        )}
                       </div>
                     </li>
                   ))}
@@ -164,14 +242,18 @@ function Mini({ label, value, accent }: { label: string; value: any; accent?: "g
 }
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between"><span className="text-muted-foreground">{label}</span><span>{value}</span></div>
+    <div className="flex justify-between">
+      <span className="text-muted-foreground">{label}</span>
+      <span>{value}</span>
+    </div>
   );
 }
 function Badge({ color, children }: { color: "good" | "warn" | "neutral"; children: any }) {
-  const c = color === "good"
-    ? "bg-primary/20 text-primary"
-    : color === "warn"
-      ? "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
-      : "bg-muted text-muted-foreground";
+  const c =
+    color === "good"
+      ? "bg-primary/20 text-primary"
+      : color === "warn"
+        ? "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
+        : "bg-muted text-muted-foreground";
   return <span className={`rounded-full px-2 py-0.5 text-xs ${c}`}>{children}</span>;
 }

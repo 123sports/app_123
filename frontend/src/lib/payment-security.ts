@@ -21,6 +21,17 @@ export type PaymentTransitionDecision = {
   reviewReason: string | null;
 };
 
+export function effectiveCheckoutStatus(
+  status: CheckoutOrderStatus | string,
+  expiresAt?: string | null,
+  nowMs = Date.now(),
+) {
+  if (status === "pending" && expiresAt && new Date(expiresAt).getTime() <= nowMs) {
+    return "expired";
+  }
+  return status;
+}
+
 type MercadoPagoPaymentIdentity = {
   transaction_amount?: number | null;
   currency_id?: string | null;

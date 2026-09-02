@@ -52,6 +52,18 @@ async function rescheduleLocalPaidBooking(
   if (booking.attended === true) {
     throw new Error("Uma reserva com presença registrada não pode ser trocada.");
   }
+  if (!booking.session_id) {
+    throw new Error("Esta reserva não possui uma turma válida para troca.");
+  }
+
+  const { data: sourceSession, error: sourceSessionError } = await (supabase as any)
+    .from("reservation_sessions")
+    .select("capacity, unit_price_cents, status")
+    .eq("id", booking.session_id)
+    .maybeSingle();
+  if (sourceSessionError || !sourceSession || sourceSession.status !== "open") {
+    throw new Error("A turma original desta reserva não foi encontrada.");
+  }
 
   if (booking.booking_date === input.newBookingDate && booking.start_hour === input.newStartHour) {
     return {
@@ -71,12 +83,14 @@ async function rescheduleLocalPaidBooking(
     input.newStartHour,
   );
 
-  const [{ data: occupied }, { data: blocks }] = await Promise.all([
+  const [{ data: destinationSessions }, { data: occupied }, { data: blocks }] = await Promise.all([
     (supabase as any)
-      .from("bookings_occupancy")
-      .select("id")
+      .from("reservation_sessions")
+      .select("*")
       .eq("booking_date", input.newBookingDate)
-      .eq("start_hour", input.newStartHour),
+      .eq("start_hour", input.newStartHour)
+      .eq("status", "open"),
+    (supabase as any).from("bookings_occupancy").select("id, session_id, user_id"),
     (supabase as any)
       .from("blocked_slots")
       .select("professor_id")
@@ -84,9 +98,6 @@ async function rescheduleLocalPaidBooking(
       .eq("start_hour", input.newStartHour),
   ]);
 
-  if ((occupied ?? []).some((row: any) => row.id !== booking.id)) {
-    throw new Error("O novo horário não está mais disponível.");
-  }
   if (
     (blocks ?? []).some(
       (row: any) => row.professor_id == null || row.professor_id === booking.professor_id,
@@ -95,16 +106,86 @@ async function rescheduleLocalPaidBooking(
     throw new Error("O novo horário está bloqueado.");
   }
 
+  let destination = (destinationSessions ?? [])[0] as any;
+  if (destination) {
+    if (
+      destination.product_type !== booking.type ||
+      destination.professor_id !== booking.professor_id
+    ) {
+      throw new Error("Escolha uma aula do mesmo tipo e professor.");
+    }
+    const participants = (occupied ?? []).filter(
+      (row: any) => row.session_id === destination.id && row.id !== booking.id,
+    );
+    if (participants.some((row: any) => row.user_id === auth.user.id)) {
+      throw new Error("Você já possui uma vaga no novo horário.");
+    }
+    if (participants.length >= destination.capacity) {
+      throw new Error("A última vaga do novo horário já foi ocupada.");
+    }
+  } else {
+    destination = {
+      id: crypto.randomUUID(),
+      booking_date: input.newBookingDate,
+      start_hour: input.newStartHour,
+      professor_id: booking.professor_id,
+      product_type: booking.type,
+      capacity: sourceSession.capacity,
+      unit_price_cents: sourceSession.unit_price_cents,
+      status: "open",
+    };
+    const { error: sessionError } = await (supabase as any)
+      .from("reservation_sessions")
+      .insert(destination);
+    if (sessionError) throw new Error(sessionError.message);
+  }
+
   const movedAt = new Date().toISOString();
   const { error: updateError } = await (supabase as any)
     .from("bookings")
     .update({
+      session_id: destination.id,
       booking_date: input.newBookingDate,
       start_hour: input.newStartHour,
     })
     .eq("id", booking.id)
     .eq("user_id", auth.user.id);
   if (updateError) throw new Error(updateError.message);
+
+  if (booking.checkout_order_id) {
+    const { data: item } = await (supabase as any)
+      .from("checkout_items")
+      .select("metadata")
+      .eq("checkout_order_id", booking.checkout_order_id)
+      .eq("reference_id", booking.id)
+      .maybeSingle();
+    await (supabase as any)
+      .from("checkout_items")
+      .update({
+        description: `${input.newBookingDate.split("-").reverse().join("/")} às ${String(input.newStartHour).padStart(2, "0")}h`,
+        metadata: {
+          ...(item?.metadata ?? {}),
+          booking_date: input.newBookingDate,
+          start_hour: input.newStartHour,
+          session_id: destination.id,
+          rescheduled: true,
+        },
+      })
+      .eq("checkout_order_id", booking.checkout_order_id)
+      .eq("reference_id", booking.id);
+  }
+
+  if (booking.session_id && booking.session_id !== destination.id) {
+    const stillOccupied = (occupied ?? []).some(
+      (row: any) => row.session_id === booking.session_id && row.id !== booking.id,
+    );
+    if (!stillOccupied) {
+      await (supabase as any)
+        .from("reservation_sessions")
+        .update({ status: "cancelled" })
+        .eq("id", booking.session_id);
+    }
+  }
 
   await (supabase as any).from("booking_reschedules").insert({
     booking_id: booking.id,

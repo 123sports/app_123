@@ -49,6 +49,7 @@ const cancelSchema = z
 type HoldResult = {
   order_id: string;
   booking_ids: string[];
+  session_ids: string[];
   amount_cents: number;
   description: string;
   expires_at: string;
@@ -262,6 +263,7 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
         orderId: hold.order_id,
         paymentId: paymentAttemptId,
         bookingIds: hold.booking_ids,
+        sessionIds: hold.session_ids,
         amountCents: hold.amount_cents,
         pixCopyPaste,
         qrCodeDataUrl,
@@ -377,22 +379,79 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
       throw new Error("O Pix retornou dados inconsistentes e foi cancelado com seguranca.");
     }
 
+    if (initialPaymentStatus === "paid_needs_review") {
+      await flagPaymentForReview(
+        hold.order_id,
+        "Pagamento criado com status que exige conferencia manual.",
+      );
+      throw new Error("Pagamento recebido e em analise. Nao faca outro pagamento.");
+    }
+
+    if (
+      initialPaymentStatus === "cancelled" ||
+      initialPaymentStatus === "failed" ||
+      initialPaymentStatus === "expired" ||
+      initialPaymentStatus === "refunded"
+    ) {
+      const terminalPatch =
+        initialPaymentStatus === "refunded"
+          ? { status: "refunded", refunded_at: new Date().toISOString() }
+          : initialPaymentStatus === "cancelled"
+            ? { status: "cancelled", cancelled_at: new Date().toISOString() }
+            : { status: initialPaymentStatus };
+      const { error: terminalError } = await (supabaseAdmin as any)
+        .from("checkout_orders")
+        .update(terminalPatch)
+        .eq("id", hold.order_id)
+        .eq("status", "pending");
+      if (terminalError) {
+        await releaseFailedCheckoutHold({
+          orderId: hold.order_id,
+          userId: context.userId,
+          providerPaymentId,
+          reason: "initial_terminal_status_persist_failed",
+        });
+      }
+      throw new Error("O Pix nao ficou disponivel. O horario foi liberado para nova tentativa.");
+    }
+
     if (initialPaymentStatus === "paid") {
-      const { error: paidOrderError } = await (supabaseAdmin as any)
+      const { data: paidOrder, error: paidOrderError } = await (supabaseAdmin as any)
         .from("checkout_orders")
         .update({
           status: "paid",
           paid_at: providerPayment.date_approved ?? new Date().toISOString(),
         })
         .eq("id", hold.order_id)
-        .eq("status", "pending");
-      if (paidOrderError) {
-        console.error("[MercadoPago] Immediate approval requires reconciliation", {
-          orderId: hold.order_id,
-          providerPaymentId,
-          error: paidOrderError.message,
-        });
-        throw new Error("Pagamento aprovado e em conciliacao. Aguarde a confirmacao da reserva.");
+        .eq("status", "pending")
+        .select("status")
+        .maybeSingle();
+      if (paidOrderError || !paidOrder) {
+        const { data: persistedOrder, error: persistedOrderError } = await (supabaseAdmin as any)
+          .from("checkout_orders")
+          .select("status")
+          .eq("id", hold.order_id)
+          .maybeSingle();
+        if (!persistedOrderError && persistedOrder?.status === "paid") {
+          // A concurrent webhook completed the same idempotent transition.
+        } else {
+          const reconciliationError =
+            paidOrderError?.message ??
+            persistedOrderError?.message ??
+            `Estado atual: ${persistedOrder?.status ?? "desconhecido"}`;
+          console.error("[MercadoPago] Immediate approval requires reconciliation", {
+            orderId: hold.order_id,
+            providerPaymentId,
+            error: reconciliationError,
+          });
+          await flagPaymentForReview(
+            hold.order_id,
+            "Pagamento aprovado, mas a confirmacao atomica da reserva falhou.",
+          );
+          throw new Error(
+            "Pagamento aprovado e em conciliacao. Nao faca outro pagamento; aguarde a confirmacao da reserva.",
+          );
+        }
       }
     }
 
@@ -400,6 +459,7 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
       orderId: hold.order_id,
       paymentId: paymentAttemptId,
       bookingIds: hold.booking_ids,
+      sessionIds: hold.session_ids,
       amountCents: hold.amount_cents,
       pixCopyPaste: qrCode,
       qrCodeDataUrl: `data:image/png;base64,${qrCodeBase64}`,

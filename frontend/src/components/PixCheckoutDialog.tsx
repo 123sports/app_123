@@ -35,8 +35,9 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
   const [remaining, setRemaining] = useState(() => remainingSeconds(initialCheckout.expiresAt));
   const [approving, setApproving] = useState(false);
   const [expired, setExpired] = useState(
-    () => initialCheckout.status !== "pending" && initialCheckout.status !== "paid"
-      || remainingSeconds(initialCheckout.expiresAt) === 0,
+    () =>
+      initialCheckout.status === "expired" ||
+      (initialCheckout.status === "pending" && remainingSeconds(initialCheckout.expiresAt) === 0),
   );
 
   useEffect(() => {
@@ -61,7 +62,7 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
         setCheckout(current);
         if (current.status === "paid") {
           window.clearInterval(poll);
-          toast.success("Pagamento confirmado e reserva liberada");
+          toast.success("Pagamento confirmado e reserva garantida");
           onPaid(current);
         }
       } catch {
@@ -97,12 +98,29 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
   };
 
   const paid = checkout.status === "paid";
+  const needsReview = checkout.status === "paid_needs_review";
+  const refunded = checkout.status === "refunded";
+  const unavailable =
+    expired ||
+    checkout.status === "expired" ||
+    checkout.status === "cancelled" ||
+    checkout.status === "failed";
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{paid ? "Pagamento confirmado" : expired ? "Cobrança indisponível" : "Pagar com Pix"}</DialogTitle>
+          <DialogTitle>
+            {paid
+              ? "Pagamento confirmado"
+              : needsReview
+                ? "Pagamento em análise"
+                : refunded
+                  ? "Pagamento estornado"
+                  : unavailable
+                    ? "Cobrança indisponível"
+                    : "Pagar com Pix"}
+          </DialogTitle>
           <DialogDescription>{checkout.description}</DialogDescription>
         </DialogHeader>
 
@@ -111,14 +129,32 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
             <CheckCircle2 className="h-14 w-14 text-primary" />
             <div className="mt-4 text-xl font-bold">{brl(checkout.amountCents)}</div>
             <p className="mt-2 text-sm text-muted-foreground">
-              A reserva está confirmada e o professor foi avisado na plataforma.
+              Sua reserva está confirmada. Você pode consultá-la na Agenda.
             </p>
           </div>
-        ) : expired ? (
+        ) : needsReview ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <ShieldCheck className="h-12 w-12 text-yellow-600" />
+            <p className="mt-4 font-medium">Seu Pix foi recebido e está sendo conferido.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Não faça outro pagamento. A confirmação aparecerá assim que a análise terminar.
+            </p>
+          </div>
+        ) : refunded ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <Clock3 className="h-12 w-12 text-muted-foreground" />
+            <p className="mt-4 font-medium">Este pagamento foi estornado.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Consulte Pagamentos para acompanhar o registro do estorno.
+            </p>
+          </div>
+        ) : unavailable ? (
           <div className="flex flex-col items-center py-8 text-center">
             <Clock3 className="h-12 w-12 text-muted-foreground" />
             <p className="mt-4 font-medium">Este Pix expirou ou foi cancelado.</p>
-            <p className="mt-1 text-sm text-muted-foreground">Volte à agenda para gerar uma nova cobrança.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Volte à agenda para gerar uma nova cobrança.
+            </p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -156,8 +192,10 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
                 <ShieldCheck className="h-4 w-4" />
                 {isLocal ? "Ambiente local" : "Pagamento seguro via Mercado Pago"}
               </span>
-              <span className={`inline-flex items-center gap-1 type-data ${expired ? "text-destructive" : ""}`}>
-                <Clock3 className="h-4 w-4" /> {expired ? "Expirado" : countdown}
+              <span
+                className={`inline-flex items-center gap-1 type-data ${expired ? "text-destructive" : ""}`}
+              >
+                <Clock3 className="h-4 w-4" /> {countdown}
               </span>
             </div>
           </div>
@@ -166,14 +204,20 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
         <DialogFooter>
           {paid ? (
             <Button onClick={onClose}>Concluir</Button>
-          ) : expired ? (
+          ) : needsReview || refunded || unavailable ? (
             <Button onClick={onClose}>Fechar</Button>
           ) : (
             <>
-              <Button variant="outline" onClick={onClose}>Fechar</Button>
+              <Button variant="outline" onClick={onClose}>
+                Fechar
+              </Button>
               {isLocal && (
                 <Button onClick={approve} disabled={approving || expired}>
-                  {approving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  {approving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4" />
+                  )}
                   Simular pagamento aprovado
                 </Button>
               )}

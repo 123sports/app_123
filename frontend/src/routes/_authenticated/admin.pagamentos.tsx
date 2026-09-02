@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, Loader2, QrCode, ReceiptText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { brl } from "@/lib/money";
+import { effectiveCheckoutStatus } from "@/lib/payment-security";
 import { cleanupExpiredLocalPixCheckouts } from "@/lib/payments";
 import { PageHeader } from "@/components/PageHeader";
 import { addMonths, startOfMonth } from "date-fns";
@@ -25,14 +26,7 @@ type CheckoutOrder = {
 };
 
 function effectiveStatus(order: CheckoutOrder) {
-  if (
-    order.status === "pending"
-    && order.expires_at
-    && new Date(order.expires_at).getTime() <= Date.now()
-  ) {
-    return "expired";
-  }
-  return order.status;
+  return effectiveCheckoutStatus(order.status, order.expires_at);
 }
 
 function AdminPayments() {
@@ -40,7 +34,16 @@ function AdminPayments() {
   const [names, setNames] = useState<Record<string, string>>({});
   const [metrics, setMetrics] = useState({ revenueMonth: 0, pending: 0, total: 0 });
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "pending" | "paid" | "expired" | "cancelled">("all");
+  const [filter, setFilter] = useState<
+    | "all"
+    | "pending"
+    | "paid"
+    | "expired"
+    | "cancelled"
+    | "failed"
+    | "refunded"
+    | "paid_needs_review"
+  >("all");
 
   const load = async () => {
     await cleanupExpiredLocalPixCheckouts();
@@ -56,7 +59,9 @@ function AdminPayments() {
     ] = await Promise.all([
       (supabase as any)
         .from("checkout_orders")
-        .select("id, user_id, kind, status, amount_cents, description, provider, expires_at, paid_at, created_at")
+        .select(
+          "id, user_id, kind, status, amount_cents, description, provider, expires_at, paid_at, created_at",
+        )
         .order("created_at", { ascending: false })
         .limit(300),
       (supabase as any)
@@ -70,14 +75,15 @@ function AdminPayments() {
         .select("id", { count: "exact", head: true })
         .eq("status", "pending")
         .or(activePendingFilter),
-      (supabase as any)
-        .from("checkout_orders")
-        .select("id", { count: "exact", head: true }),
+      (supabase as any).from("checkout_orders").select("id", { count: "exact", head: true }),
     ]);
     const nextOrders = (orderRows ?? []) as CheckoutOrder[];
     setOrders(nextOrders);
     setMetrics({
-      revenueMonth: (paidRows ?? []).reduce((sum: number, order: { amount_cents: number }) => sum + order.amount_cents, 0),
+      revenueMonth: (paidRows ?? []).reduce(
+        (sum: number, order: { amount_cents: number }) => sum + order.amount_cents,
+        0,
+      ),
       pending: pendingCount ?? 0,
       total: totalCount ?? 0,
     });
@@ -88,7 +94,11 @@ function AdminPayments() {
         .from("profiles_public")
         .select("id, full_name")
         .in("id", ids);
-      setNames(Object.fromEntries((profiles ?? []).map((profile: any) => [profile.id, profile.full_name ?? "Aluno"])));
+      setNames(
+        Object.fromEntries(
+          (profiles ?? []).map((profile: any) => [profile.id, profile.full_name ?? "Aluno"]),
+        ),
+      );
     }
     setLoading(false);
   };
@@ -99,7 +109,11 @@ function AdminPayments() {
     window.addEventListener("on-tennis-local-data-change", handleLocalChange);
     const channel = supabase
       .channel("admin-payments")
-      .on("postgres_changes", { event: "*", schema: "public", table: "checkout_orders" }, () => void load())
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "checkout_orders" },
+        () => void load(),
+      )
       .subscribe();
     const refreshInterval = window.setInterval(() => void load(), 60_000);
     return () => {
@@ -130,6 +144,9 @@ function AdminPayments() {
             <option value="paid">Pagos</option>
             <option value="expired">Expirados</option>
             <option value="cancelled">Cancelados</option>
+            <option value="failed">Falharam</option>
+            <option value="refunded">Estornados</option>
+            <option value="paid_needs_review">Precisam de atenção</option>
           </select>
         }
       />
@@ -175,14 +192,23 @@ function AdminPayments() {
                         })}
                       </td>
                       <td className="p-3 font-medium">{names[order.user_id] ?? "Aluno"}</td>
-                      <td className="min-w-[280px] p-3 text-muted-foreground">{order.description}</td>
+                      <td className="min-w-[280px] p-3 text-muted-foreground">
+                        <div>{order.description}</div>
+                        <div className="mt-1 type-micro type-data">
+                          Ref. {order.id.slice(0, 8).toUpperCase()}
+                        </div>
+                      </td>
                       <td className="p-3">
                         <span className="inline-flex items-center gap-1.5">
                           <QrCode className="h-4 w-4" /> Pix
                         </span>
                       </td>
-                      <td className="p-3"><Status status={effectiveStatus(order)} /></td>
-                      <td className="p-3 text-right type-data font-semibold">{brl(order.amount_cents)}</td>
+                      <td className="p-3">
+                        <Status status={effectiveStatus(order)} />
+                      </td>
+                      <td className="p-3 text-right type-data font-semibold">
+                        {brl(order.amount_cents)}
+                      </td>
                     </tr>
                   );
                 })}
@@ -195,7 +221,15 @@ function AdminPayments() {
   );
 }
 
-function Metric({ icon: Icon, label, value }: { icon: any; label: string; value: string | number }) {
+function Metric({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: any;
+  label: string;
+  value: string | number;
+}) {
   return (
     <div className="plane h-full">
       <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -224,10 +258,12 @@ function Status({ status }: { status: string }) {
     cancelled: "Cancelado",
     failed: "Falhou",
     refunded: "Estornado",
-    paid_needs_review: "Verificar",
+    paid_needs_review: "Precisa de atenção",
   };
   return (
-    <span className={`inline-flex px-2 py-1 text-xs font-medium ${styles[status] ?? "bg-muted text-muted-foreground"}`}>
+    <span
+      className={`inline-flex px-2 py-1 text-xs font-medium ${styles[status] ?? "bg-muted text-muted-foreground"}`}
+    >
       {labels[status] ?? status}
     </span>
   );

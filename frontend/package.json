@@ -19,7 +19,10 @@
     "test:security": "node tests/reschedule-rpc-security.mjs",
     "test:notifications": "node tests/payment-notifications-security.mjs",
     "test:payment-security": "node tests/payment-audit-security.mjs",
+    "test:shared-sessions": "node tests/shared-session-security.mjs",
+    "test:shared-sessions:preflight": "node tests/shared-session-migration-preflight.mjs",
     "test:e2e:reschedule": "node tests/agenda-reschedule.e2e.mjs",
+    "test:e2e:shared-sessions": "node tests/shared-session-ui.e2e.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

@@ -162,6 +162,7 @@ export type Database = {
           payment_status: string
           price_cents: number | null
           professor_id: string | null
+          session_id: string | null
           start_hour: number
           status: Database["public"]["Enums"]["booking_status"]
           type: Database["public"]["Enums"]["booking_type"]
@@ -184,6 +185,7 @@ export type Database = {
           payment_status?: string
           price_cents?: number | null
           professor_id?: string | null
+          session_id?: string | null
           start_hour: number
           status?: Database["public"]["Enums"]["booking_status"]
           type: Database["public"]["Enums"]["booking_type"]
@@ -206,6 +208,7 @@ export type Database = {
           payment_status?: string
           price_cents?: number | null
           professor_id?: string | null
+          session_id?: string | null
           start_hour?: number
           status?: Database["public"]["Enums"]["booking_status"]
           type?: Database["public"]["Enums"]["booking_type"]
@@ -218,6 +221,13 @@ export type Database = {
             columns: ["checkout_order_id"]
             isOneToOne: false
             referencedRelation: "checkout_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "reservation_sessions"
             referencedColumns: ["id"]
           },
         ]
@@ -961,6 +971,7 @@ export type Database = {
           kind: string
           read: boolean
           related_booking_id: string | null
+          related_checkout_order_id: string | null
           title: string
           user_id: string
         }
@@ -971,6 +982,7 @@ export type Database = {
           kind?: string
           read?: boolean
           related_booking_id?: string | null
+          related_checkout_order_id?: string | null
           title: string
           user_id: string
         }
@@ -981,10 +993,26 @@ export type Database = {
           kind?: string
           read?: boolean
           related_booking_id?: string | null
+          related_checkout_order_id?: string | null
           title?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "notifications_related_checkout_order_id_fkey"
+            columns: ["related_checkout_order_id"]
+            isOneToOne: false
+            referencedRelation: "checkout_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_related_checkout_order_id_fkey"
+            columns: ["related_checkout_order_id"]
+            isOneToOne: false
+            referencedRelation: "checkout_orders_admin"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       open_match_participants: {
         Row: {
@@ -1216,27 +1244,83 @@ export type Database = {
           active: boolean
           booking_type: Database["public"]["Enums"]["booking_type"]
           created_at: string
+          display_name: string
           id: string
           price_cents: number
+          requires_professor: boolean
+          sort_order: number
+          student_capacity: number
           updated_at: string
         }
         Insert: {
           active?: boolean
           booking_type: Database["public"]["Enums"]["booking_type"]
           created_at?: string
+          display_name: string
           id?: string
           price_cents?: number
+          requires_professor: boolean
+          sort_order: number
+          student_capacity: number
           updated_at?: string
         }
         Update: {
           active?: boolean
           booking_type?: Database["public"]["Enums"]["booking_type"]
           created_at?: string
+          display_name?: string
           id?: string
           price_cents?: number
+          requires_professor?: boolean
+          sort_order?: number
+          student_capacity?: number
           updated_at?: string
         }
         Relationships: []
+      }
+      pricing_change_history: {
+        Row: {
+          booking_type: Database["public"]["Enums"]["booking_type"]
+          changed_at: string
+          changed_by: string | null
+          id: string
+          new_active: boolean
+          new_price_cents: number
+          old_active: boolean
+          old_price_cents: number
+          pricing_id: string
+        }
+        Insert: {
+          booking_type: Database["public"]["Enums"]["booking_type"]
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          new_active: boolean
+          new_price_cents: number
+          old_active: boolean
+          old_price_cents: number
+          pricing_id: string
+        }
+        Update: {
+          booking_type?: Database["public"]["Enums"]["booking_type"]
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          new_active?: boolean
+          new_price_cents?: number
+          old_active?: boolean
+          old_price_cents?: number
+          pricing_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_change_history_pricing_id_fkey"
+            columns: ["pricing_id"]
+            isOneToOne: false
+            referencedRelation: "pricing"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       professor_feedback: {
         Row: {
@@ -1396,6 +1480,53 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      reservation_sessions: {
+        Row: {
+          booking_date: string
+          capacity: number
+          created_at: string
+          id: string
+          product_type: Database["public"]["Enums"]["booking_type"]
+          professor_id: string | null
+          start_hour: number
+          status: string
+          unit_price_cents: number
+          updated_at: string
+        }
+        Insert: {
+          booking_date: string
+          capacity: number
+          created_at?: string
+          id?: string
+          product_type: Database["public"]["Enums"]["booking_type"]
+          professor_id?: string | null
+          start_hour: number
+          status?: string
+          unit_price_cents: number
+          updated_at?: string
+        }
+        Update: {
+          booking_date?: string
+          capacity?: number
+          created_at?: string
+          id?: string
+          product_type?: Database["public"]["Enums"]["booking_type"]
+          professor_id?: string | null
+          start_hour?: number
+          status?: string
+          unit_price_cents?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservation_sessions_product_type_fkey"
+            columns: ["product_type"]
+            isOneToOne: false
+            referencedRelation: "pricing"
+            referencedColumns: ["booking_type"]
+          },
+        ]
       }
       site_settings: {
         Row: {
@@ -1644,6 +1775,66 @@ export type Database = {
         }
         Relationships: []
       }
+      reservation_session_availability: {
+        Row: {
+          available_seats: number | null
+          booking_date: string | null
+          capacity: number | null
+          display_name: string | null
+          is_full: boolean | null
+          my_booking_id: string | null
+          my_booking_status: string | null
+          my_checkout_order_id: string | null
+          my_hold_expires_at: string | null
+          my_payment_status: string | null
+          occupied_seats: number | null
+          product_type: Database["public"]["Enums"]["booking_type"] | null
+          professor_id: string | null
+          session_id: string | null
+          start_hour: number | null
+          unit_price_cents: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          available_seats?: never
+          booking_date?: string | null
+          capacity?: number | null
+          display_name?: string | null
+          is_full?: boolean | null
+          my_booking_id?: never
+          my_booking_status?: never
+          my_checkout_order_id?: never
+          my_hold_expires_at?: never
+          my_payment_status?: never
+          occupied_seats?: never
+          product_type?: Database["public"]["Enums"]["booking_type"] | null
+          professor_id?: string | null
+          session_id?: string | null
+          start_hour?: number | null
+          unit_price_cents?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          available_seats?: never
+          booking_date?: string | null
+          capacity?: number | null
+          display_name?: string | null
+          is_full?: boolean | null
+          my_booking_id?: never
+          my_booking_status?: never
+          my_checkout_order_id?: never
+          my_hold_expires_at?: never
+          my_payment_status?: never
+          occupied_seats?: never
+          product_type?: Database["public"]["Enums"]["booking_type"] | null
+          professor_id?: string | null
+          session_id?: string | null
+          start_hour?: number | null
+          unit_price_cents?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       profiles_public: {
         Row: {
           aces: number | null
@@ -1703,7 +1894,7 @@ export type Database = {
           p_booking_date: string
           p_booking_type: Database["public"]["Enums"]["booking_type"]
           p_hours: number[]
-          p_professor_id?: string
+          p_professor_id?: string | null
           p_user_id: string
         }
         Returns: Json
