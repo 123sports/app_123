@@ -1,6 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarClock, ChevronLeft, ChevronRight, Loader2, Users } from "lucide-react";
+import {
+  CalendarClock,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Users,
+  WalletCards,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   addDays,
@@ -23,6 +30,12 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { hasBookingMinimumNotice, isBookingScheduleAllowed } from "@/lib/booking-schedule";
 import { reschedulePaidBooking } from "@/lib/bookings";
+import {
+  cancelCreditBooking,
+  createCreditBooking,
+  creditModalityForBookingType,
+  type CreditModality,
+} from "@/lib/credits";
 import { brl } from "@/lib/money";
 import {
   cancelLocalPixCheckout,
@@ -61,7 +74,9 @@ type SessionAvailability = {
   my_booking_id: string | null;
   my_booking_status: string | null;
   my_payment_status: string | null;
+  my_payment_method: string | null;
   my_checkout_order_id: string | null;
+  my_credit_grant_id: string | null;
   my_hold_expires_at: string | null;
 };
 
@@ -94,6 +109,12 @@ function Agenda() {
   const [checkout, setCheckout] = useState<PixCheckout | null>(null);
   const [rescheduling, setRescheduling] = useState<ReschedulingBooking | null>(null);
   const [loading, setLoading] = useState(false);
+  const [creditBalances, setCreditBalances] = useState<Record<CreditModality, number>>({
+    individual: 0,
+    dupla: 0,
+    grupo: 0,
+  });
+  const [cancellationNoticeHours, setCancellationNoticeHours] = useState(24);
 
   const minDate = startOfDay(new Date());
   const maxDate = addDays(minDate, 31);
@@ -103,6 +124,8 @@ function Agenda() {
     [products],
   );
   const activeProduct = productByType.get(type) ?? null;
+  const activeCreditModality = creditModalityForBookingType(type);
+  const availableCredits = activeCreditModality ? creditBalances[activeCreditModality] : 0;
 
   const monthDays = useMemo(() => {
     const start = startOfMonth(cursor);
@@ -136,11 +159,54 @@ function Agenda() {
       );
       setProducts(visibleProducts);
       setProfessors(professorRows ?? []);
-      if (!visibleProducts.some((product) => product.booking_type === type) && visibleProducts[0]) {
-        setType(visibleProducts[0].booking_type);
-      }
+      setType((current) =>
+        visibleProducts.some((product) => product.booking_type === current)
+          ? current
+          : (visibleProducts[0]?.booking_type ?? current),
+      );
     })();
   }, []);
+
+  const loadCredits = useCallback(async () => {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) return;
+    const [{ data: summaryRows }, { data: policy }] = await Promise.all([
+      (supabase as any)
+        .from("student_credit_summary")
+        .select("modality, available_credits")
+        .eq("user_id", auth.user.id),
+      (supabase as any)
+        .from("site_settings")
+        .select("value")
+        .eq("key", "cancellation_notice_hours")
+        .maybeSingle(),
+    ]);
+    const balances: Record<CreditModality, number> = { individual: 0, dupla: 0, grupo: 0 };
+    for (const row of summaryRows ?? []) {
+      if (row.modality in balances) {
+        balances[row.modality as CreditModality] = Math.max(0, Number(row.available_credits) || 0);
+      }
+    }
+    setCreditBalances(balances);
+    const hours = Number(policy?.value ?? 24);
+    setCancellationNoticeHours(Number.isInteger(hours) && hours >= 0 && hours <= 720 ? hours : 24);
+  }, []);
+
+  useEffect(() => {
+    void loadCredits();
+    const refresh = () => void loadCredits();
+    const channel = supabase
+      .channel("student-credit-balance-agenda")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "student_credit_ledger" },
+        refresh,
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [loadCredits]);
 
   useEffect(() => {
     if (activeProduct?.requires_professor && !professorId && professors[0]) {
@@ -201,7 +267,7 @@ function Agenda() {
 
   useEffect(() => {
     setPendingHours(new Set());
-  }, [selectedDate, type, professorId]);
+  }, [selectedDate, type]);
 
   const daySessions = sessions.filter((session) => session.booking_date === selectedDate);
   const sessionsByHour = new Map(daySessions.map((session) => [session.start_hour, session]));
@@ -293,6 +359,7 @@ function Agenda() {
 
   const chooseHour = (hour: number, session?: SessionAvailability) => {
     if (session?.my_booking_id) {
+      if (session.my_payment_method === "credito_plano") return;
       if (session.my_payment_status === "pago") beginReschedule(session);
       else if (session.my_payment_status === "pendente" && session.my_checkout_order_id) {
         void openPendingCheckout(session.my_checkout_order_id);
@@ -366,6 +433,66 @@ function Agenda() {
     }
   };
 
+  const confirmCreditBooking = async () => {
+    const startHour = [...pendingHours][0];
+    if (!activeProduct || startHour == null || !activeCreditModality || availableCredits < 1)
+      return;
+    const selectedSession = sessionsByHour.get(startHour);
+    const creditProfessor = selectedSession?.professor_id ?? effectiveProfessorId;
+    if (!creditProfessor) {
+      toast.error("Selecione o professor antes de continuar.");
+      return;
+    }
+    playPop();
+    setLoading(true);
+    try {
+      const result = await createCreditBooking({
+        bookingDate: selectedDate,
+        startHour,
+        bookingType: type as "aula_individual" | "aula_dupla" | "aula_trio" | "aula_quarteto",
+        professorId: creditProfessor,
+      });
+      toast.success("Aula confirmada com crédito", {
+        description: `Você ainda possui ${result.available_credits} ${result.available_credits === 1 ? "crédito" : "créditos"} nesta modalidade.`,
+      });
+      setPendingHours(new Set());
+      await Promise.all([loadMonth(), loadCredits()]);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Não foi possível usar seu crédito nesta aula.");
+      await Promise.all([loadMonth(), loadCredits()]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelOwnedCreditBooking = async (session: SessionAvailability) => {
+    if (!session.my_booking_id) return;
+    const policy =
+      cancellationNoticeHours === 0
+        ? "O crédito retorna se a aula ainda não tiver começado."
+        : `O crédito retorna quando o cancelamento é feito com pelo menos ${cancellationNoticeHours} horas de antecedência.`;
+    if (!window.confirm(`Cancelar esta aula?\n\n${policy}`)) return;
+    playPop();
+    setLoading(true);
+    try {
+      const result = await cancelCreditBooking(session.my_booking_id);
+      toast.success(
+        result.credit_returned ? "Aula cancelada e crédito devolvido" : "Aula cancelada",
+        {
+          description: result.credit_returned
+            ? "O crédito já está disponível para uma nova reserva."
+            : `A vaga foi liberada, mas o crédito não retornou porque faltavam menos de ${result.notice_hours} horas.`,
+        },
+      );
+      await Promise.all([loadMonth(), loadCredits()]);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Não foi possível cancelar esta aula.");
+      await loadMonth();
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const selectedTotal = [...pendingHours].reduce((total, hour) => {
     const session = sessionsByHour.get(hour);
     return total + (session?.unit_price_cents ?? activeProduct?.price_cents ?? 0);
@@ -376,7 +503,7 @@ function Agenda() {
       <PageHeader
         eyebrow="Agenda"
         title="Agenda da quadra"
-        subtitle="Escolha uma aula e reserve sua vaga pelo Pix"
+        subtitle="Escolha uma aula e reserve com crédito ou Pix"
       />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
@@ -513,7 +640,10 @@ function Agenda() {
               <select
                 id="booking-professor"
                 value={professorId}
-                onChange={(event) => setProfessorId(event.target.value)}
+                onChange={(event) => {
+                  setProfessorId(event.target.value);
+                  setPendingHours(new Set());
+                }}
                 disabled={Boolean(rescheduling)}
                 className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
               >
@@ -528,9 +658,17 @@ function Agenda() {
           )}
 
           <div className="flex items-center justify-between border border-input bg-background px-3 py-2 text-sm">
-            <span className="font-medium">Pagamento por Pix</span>
+            <span className="font-medium">
+              {availableCredits > 0
+                ? `${availableCredits} créditos disponíveis`
+                : "Pagamento por Pix"}
+            </span>
             <span className="text-xs text-muted-foreground">
-              {rescheduling ? "já confirmado" : "confirmação automática"}
+              {rescheduling
+                ? "já confirmado"
+                : availableCredits > 0
+                  ? "use 1 por aula"
+                  : "confirmação automática"}
             </span>
           </div>
 
@@ -573,21 +711,54 @@ function Agenda() {
               </div>
               <div className="flex items-center justify-between border-y border-primary/20 py-2">
                 <span className="text-sm text-muted-foreground">
-                  {rescheduling ? "Novo pagamento" : "Total"}
+                  {rescheduling
+                    ? "Novo pagamento"
+                    : availableCredits > 0
+                      ? "Reserva avulsa por Pix"
+                      : "Total"}
                 </span>
                 <strong className="type-data text-lg">
                   {rescheduling ? "R$ 0,00" : brl(selectedTotal)}
                 </strong>
               </div>
-              <button
-                type="button"
-                onClick={rescheduling ? confirmReschedule : confirmBooking}
-                disabled={loading || (!rescheduling && selectedTotal <= 0)}
-                className="btn-bounce inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-              >
-                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                {rescheduling ? "Confirmar troca" : "Ir para pagamento"}
-              </button>
+              {rescheduling ? (
+                <button
+                  type="button"
+                  onClick={confirmReschedule}
+                  disabled={loading}
+                  className="btn-bounce inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                >
+                  {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Confirmar troca
+                </button>
+              ) : (
+                <div className="grid gap-2">
+                  {activeCreditModality && availableCredits > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => void confirmCreditBooking()}
+                      disabled={loading}
+                      className="btn-bounce inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                    >
+                      {loading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <WalletCards className="h-4 w-4" />
+                      )}
+                      Reservar com 1 crédito
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void confirmBooking()}
+                    disabled={loading || selectedTotal <= 0}
+                    className={`btn-bounce inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60 ${availableCredits > 0 ? "border border-input bg-background text-foreground" : "bg-primary text-primary-foreground"}`}
+                  >
+                    {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Pagar reserva avulsa com Pix
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -629,6 +800,15 @@ function Agenda() {
                             Cancelar
                           </button>
                         </span>
+                      ) : session.my_payment_method === "credito_plano" ? (
+                        <button
+                          type="button"
+                          onClick={() => void cancelOwnedCreditBooking(session)}
+                          disabled={loading}
+                          className="text-xs font-medium text-destructive hover:underline"
+                        >
+                          Cancelar aula
+                        </button>
                       ) : (
                         <button
                           type="button"
@@ -683,7 +863,14 @@ function SlotButton({
   if (session?.is_full && !mine) detail = "Lotado";
   if (session && canJoin)
     detail = `${session.available_seats} ${session.available_seats === 1 ? "vaga" : "vagas"}`;
-  if (mine) detail = session?.my_payment_status === "pendente" ? "Aguardando Pix" : "Sua vaga";
+  if (mine) {
+    detail =
+      session?.my_payment_status === "pendente"
+        ? "Aguardando Pix"
+        : session?.my_payment_method === "credito_plano"
+          ? "Usou crédito"
+          : "Sua vaga";
+  }
   if (session && !mine && !canJoin && !session.is_full) detail = "Outra aula";
 
   return (

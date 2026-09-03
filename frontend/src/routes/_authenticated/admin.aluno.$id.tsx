@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Phone, AlertTriangle, Cake, Trophy } from "lucide-react";
+import { ArrowLeft, Phone, AlertTriangle, Cake, Trophy, WalletCards } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { brl } from "@/lib/money";
 import { effectiveCheckoutStatus } from "@/lib/payment-security";
@@ -15,9 +15,24 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
   isento: "Isento",
 };
 
-function paymentStatusLabel(status: string) {
+function paymentStatusLabel(status: string, method?: string | null) {
+  if (status === "pago" && method === "credito_plano") return "Crédito do plano";
   return PAYMENT_STATUS_LABELS[status] ?? status;
 }
+
+const CREDIT_MODALITY_LABELS: Record<string, string> = {
+  individual: "Individual",
+  dupla: "Dupla",
+  grupo: "Grupo",
+};
+
+const CREDIT_HISTORY_LABELS: Record<string, string> = {
+  purchase_grant: "Créditos liberados",
+  booking_debit: "Aula reservada",
+  cancellation_credit: "Crédito devolvido",
+  late_cancellation_forfeit: "Cancelamento fora do prazo",
+  refund_reversal: "Plano estornado",
+};
 
 export const Route = createFileRoute("/_authenticated/admin/aluno/$id")({
   component: AlunoDetalhe,
@@ -30,20 +45,51 @@ function AlunoDetalhe() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [points, setPoints] = useState(0);
   const [avatar, setAvatar] = useState<string | null>(null);
+  const [revenue, setRevenue] = useState(0);
+  const [pendingPayments, setPendingPayments] = useState(0);
+  const [creditBalances, setCreditBalances] = useState<any[]>([]);
+  const [creditHistory, setCreditHistory] = useState<any[]>([]);
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: p }, { data: bs }, { data: ev }] = await Promise.all([
+      const [
+        { data: p },
+        { data: bs },
+        { data: ev },
+        { data: paidOrders },
+        { data: balances },
+        { data: ledger },
+      ] = await Promise.all([
         (supabase as any).rpc("get_student_for_professor", { _student_id: id }),
         supabase
           .from("bookings")
           .select(
-            "id, booking_date, start_hour, type, status, payment_status, hold_expires_at, amount_cents, attended",
+            "id, booking_date, start_hour, type, status, payment_status, payment_method, hold_expires_at, amount_cents, attended",
           )
           .eq("user_id", id)
           .order("booking_date", { ascending: false }),
         staffRole === "admin"
           ? supabase.from("gamification_events").select("points").eq("user_id", id)
+          : Promise.resolve({ data: [] }),
+        staffRole === "admin"
+          ? supabase
+              .from("checkout_orders")
+              .select("status, amount_cents, expires_at")
+              .eq("user_id", id)
+          : Promise.resolve({ data: [] }),
+        staffRole === "admin"
+          ? (supabase as any)
+              .from("student_credit_summary")
+              .select("modality, available_credits, credits_acquired")
+              .eq("user_id", id)
+          : Promise.resolve({ data: [] }),
+        staffRole === "admin"
+          ? (supabase as any)
+              .from("student_credit_ledger")
+              .select("id, sequence_no, entry_type, credit_delta, reason, created_at")
+              .eq("user_id", id)
+              .order("sequence_no", { ascending: false })
+              .limit(30)
           : Promise.resolve({ data: [] }),
       ]);
       setProfile(p);
@@ -59,6 +105,20 @@ function AlunoDetalhe() {
         })),
       );
       setPoints((ev ?? []).reduce((s: number, e: any) => s + (e.points ?? 0), 0));
+      setRevenue(
+        (paidOrders ?? [])
+          .filter((order: any) => order.status === "paid")
+          .reduce((sum: number, order: any) => sum + (order.amount_cents ?? 0), 0),
+      );
+      setPendingPayments(
+        (paidOrders ?? []).filter(
+          (order: any) =>
+            order.status === "pending" &&
+            (!order.expires_at || new Date(order.expires_at).getTime() > Date.now()),
+        ).length,
+      );
+      setCreditBalances(balances ?? []);
+      setCreditHistory(ledger ?? []);
       if (p?.avatar_url) {
         const { data: signed } = await supabase.storage
           .from("avatars")
@@ -75,6 +135,16 @@ function AlunoDetalhe() {
         { event: "*", schema: "public", table: "bookings" },
         () => void load(),
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "student_credit_ledger",
+          filter: `user_id=eq.${id}`,
+        },
+        () => void load(),
+      )
       .subscribe();
     const refreshInterval = window.setInterval(() => void load(), 30_000);
     return () => {
@@ -86,10 +156,6 @@ function AlunoDetalhe() {
   const total = bookings.length;
   const attended = bookings.filter((b) => b.attended === true).length;
   const missed = bookings.filter((b) => b.attended === false).length;
-  const unpaid = bookings.filter((b) => b.payment_status === "pendente").length;
-  const revenue = bookings
-    .filter((b) => b.payment_status === "pago")
-    .reduce((s, b) => s + (b.amount_cents ?? 0), 0);
 
   return (
     <div className="space-y-4">
@@ -156,7 +222,11 @@ function AlunoDetalhe() {
             <Mini label="Faltas" value={missed} accent="bad" />
             {staffRole === "admin" && (
               <>
-                <Mini label="Pix pendentes" value={unpaid} accent={unpaid ? "bad" : undefined} />
+                <Mini
+                  label="Pix pendentes"
+                  value={pendingPayments}
+                  accent={pendingPayments ? "bad" : undefined}
+                />
                 <Mini label="Receita Pix" value={brl(revenue)} />
               </>
             )}
@@ -210,7 +280,7 @@ function AlunoDetalhe() {
                                 : "neutral"
                           }
                         >
-                          {paymentStatusLabel(b.payment_status)}
+                          {paymentStatusLabel(b.payment_status, b.payment_method)}
                         </Badge>
                         {b.attended === true && (
                           <span className="ml-1 type-micro text-primary">presente</span>
@@ -225,6 +295,62 @@ function AlunoDetalhe() {
               )}
             </div>
           </section>
+
+          {staffRole === "admin" && (
+            <section className="grid gap-4 lg:grid-cols-[minmax(0,320px)_1fr]">
+              <div className="bg-card/30 p-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <WalletCards className="h-4 w-4 text-primary" />
+                  <h2 className="type-h3">Créditos disponíveis</h2>
+                </div>
+                {creditBalances.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhum crédito ativo.</p>
+                ) : (
+                  <ul className="space-y-2 text-sm">
+                    {creditBalances.map((balance) => (
+                      <li
+                        key={balance.modality}
+                        className="flex items-center justify-between border-b border-border pb-2 last:border-0 last:pb-0"
+                      >
+                        <span>{CREDIT_MODALITY_LABELS[balance.modality] ?? balance.modality}</span>
+                        <strong className="type-data">
+                          {balance.available_credits} de {balance.credits_acquired}
+                        </strong>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="bg-card/30 p-5">
+                <h2 className="type-h3 mb-3">Histórico financeiro de créditos</h2>
+                {creditHistory.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhuma movimentação registrada.</p>
+                ) : (
+                  <ul className="max-h-80 divide-y divide-border overflow-y-auto pr-1 text-sm">
+                    {creditHistory.map((entry) => (
+                      <li key={entry.id} className="flex items-center gap-3 py-2 first:pt-0">
+                        <strong
+                          className={`w-8 shrink-0 text-right type-data ${entry.credit_delta > 0 ? "text-primary" : "text-foreground"}`}
+                        >
+                          {entry.credit_delta > 0 ? "+" : ""}
+                          {entry.credit_delta}
+                        </strong>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium">
+                            {CREDIT_HISTORY_LABELS[entry.entry_type] ?? entry.entry_type}
+                          </div>
+                          <div className="type-micro text-muted-foreground">
+                            {new Date(entry.created_at).toLocaleString("pt-BR")}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </section>
+          )}
         </>
       )}
     </div>

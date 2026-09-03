@@ -46,6 +46,12 @@ const cancelSchema = z
   })
   .strict();
 
+const createPlanSchema = z
+  .object({
+    planId: z.string().uuid(),
+  })
+  .strict();
+
 type HoldResult = {
   order_id: string;
   booking_ids: string[];
@@ -172,6 +178,22 @@ function localPixPayload(orderId: string, amountCents: number) {
   ].join("|");
 }
 
+type ProductionPayer = { email: string; fullName?: string | null; cpf: string };
+
+async function getProductionPayer(userId: string): Promise<ProductionPayer> {
+  const [{ data: authUser }, { data: profile }] = await Promise.all([
+    supabaseAdmin.auth.admin.getUserById(userId),
+    supabaseAdmin.from("profiles").select("full_name, cpf").eq("id", userId).maybeSingle(),
+  ]);
+  const email = authUser.user?.email;
+  if (!email) throw new Error("A conta precisa ter um e-mail valido para pagar.");
+  const cpfDigits = String((profile as any)?.cpf ?? "").replace(/\D/g, "");
+  if (!isValidCpf(cpfDigits)) {
+    throw new Error("Preencha um CPF valido em Perfil antes de pagar com Pix.");
+  }
+  return { email, fullName: profile?.full_name, cpf: cpfDigits };
+}
+
 export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => createSchema.parse(data))
@@ -185,28 +207,7 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
       throw new Error("Mercado Pago ainda nao foi configurado no servidor.");
     }
 
-    let productionPayer: { email: string; fullName?: string | null; cpf: string } | null = null;
-    if (!localSimulation) {
-      const [{ data: authUser }, { data: profile }] = await Promise.all([
-        supabaseAdmin.auth.admin.getUserById(context.userId),
-        supabaseAdmin
-          .from("profiles")
-          .select("full_name, cpf")
-          .eq("id", context.userId)
-          .maybeSingle(),
-      ]);
-      const email = authUser.user?.email;
-      if (!email) throw new Error("A conta precisa ter um e-mail valido para pagar.");
-      const cpfDigits = String((profile as any)?.cpf ?? "").replace(/\D/g, "");
-      if (!isValidCpf(cpfDigits)) {
-        throw new Error("Preencha um CPF valido em Perfil antes de pagar com Pix.");
-      }
-      productionPayer = {
-        email,
-        fullName: profile?.full_name,
-        cpf: cpfDigits,
-      };
-    }
+    const productionPayer = localSimulation ? null : await getProductionPayer(context.userId);
 
     const uniqueHours = [...new Set(data.hours)].sort((a, b) => a - b);
     for (const hour of uniqueHours) {
@@ -270,6 +271,7 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
         expiresAt: hold.expires_at,
         status: "pending" as const,
         description: hold.description,
+        kind: "booking" as const,
       };
     }
 
@@ -317,7 +319,7 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
       throw new Error("O Mercado Pago nao retornou os dados completos do Pix.");
     }
 
-    const paymentAttemptId = crypto.randomUUID();
+    let paymentAttemptId = crypto.randomUUID();
     const initialPaymentStatus = mercadoPagoPaymentStatus(
       providerPayment.status,
       providerPayment.status_detail,
@@ -345,18 +347,57 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
     });
 
     if (attemptError) {
-      console.error("[MercadoPago] Failed to persist payment attempt", {
-        orderId: hold.order_id,
-        providerPaymentId,
-        error: attemptError.message,
-      });
-      await releaseFailedCheckoutHold({
-        orderId: hold.order_id,
-        userId: context.userId,
-        providerPaymentId,
-        reason: "payment_attempt_persist_failed",
-      });
-      throw new Error("Pix criado, mas a confirmacao local falhou. O horario foi liberado.");
+      const { data: concurrentAttempt } = await (supabaseAdmin as any)
+        .from("payment_attempts")
+        .select("id, checkout_order_id, status")
+        .eq("provider", "mercado_pago")
+        .eq("provider_payment_id", providerPaymentId)
+        .maybeSingle();
+      if (concurrentAttempt?.checkout_order_id === hold.order_id) {
+        paymentAttemptId = concurrentAttempt.id;
+        if (
+          paymentValidation.valid &&
+          initialPaymentStatus === "paid" &&
+          concurrentAttempt.status !== "paid"
+        ) {
+          const { data: reconciledAttempt, error: reconcileAttemptError } = await (
+            supabaseAdmin as any
+          )
+            .from("payment_attempts")
+            .update({
+              status: "paid",
+              paid_at: providerPayment.date_approved ?? new Date().toISOString(),
+              provider_payload: safeMercadoPagoPayload(providerPayment),
+            })
+            .eq("id", concurrentAttempt.id)
+            .eq("checkout_order_id", hold.order_id)
+            .in("status", ["pending", "expired", "cancelled", "failed", "paid_needs_review"])
+            .select("id")
+            .maybeSingle();
+          if (reconcileAttemptError || !reconciledAttempt) {
+            await flagPaymentForReview(
+              hold.order_id,
+              "Pagamento aprovado, mas a tentativa concorrente nao pode ser conciliada.",
+            );
+            throw new Error(
+              "Pagamento aprovado e em conciliacao. Nao faca outro pagamento; aguarde a confirmacao da reserva.",
+            );
+          }
+        }
+      } else {
+        console.error("[MercadoPago] Failed to persist payment attempt", {
+          orderId: hold.order_id,
+          providerPaymentId,
+          error: attemptError.message,
+        });
+        await releaseFailedCheckoutHold({
+          orderId: hold.order_id,
+          userId: context.userId,
+          providerPaymentId,
+          reason: "payment_attempt_persist_failed",
+        });
+        throw new Error("Pix criado, mas a confirmacao local falhou. O horario foi liberado.");
+      }
     }
 
     if (!paymentValidation.valid) {
@@ -466,6 +507,267 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
       expiresAt: providerPayment.date_of_expiration ?? hold.expires_at,
       status: initialPaymentStatus === "paid" ? ("paid" as const) : ("pending" as const),
       description: hold.description,
+      kind: "booking" as const,
+    };
+  });
+
+export const createClassPlanPixCheckoutServer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => createPlanSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const localSimulation = localPaymentSimulationAllowed();
+    if (!localSimulation && !isMercadoPagoConfigured()) {
+      throw new Error("Mercado Pago ainda nao foi configurado no servidor.");
+    }
+    const productionPayer = localSimulation ? null : await getProductionPayer(context.userId);
+
+    const { data: holdData, error: holdError } = await (supabaseAdmin as any).rpc(
+      "create_class_plan_checkout",
+      { p_user_id: context.userId, p_plan_id: data.planId },
+    );
+    if (holdError || !holdData) {
+      throw new Error(holdError?.message ?? "Nao foi possivel iniciar a compra do plano.");
+    }
+    const hold = holdData as HoldResult;
+
+    if (localSimulation) {
+      const paymentAttemptId = crypto.randomUUID();
+      const pixCopyPaste = localPixPayload(hold.order_id, hold.amount_cents);
+      const qrCodeDataUrl = await QRCode.toDataURL(pixCopyPaste, {
+        errorCorrectionLevel: "M",
+        margin: 1,
+        width: 320,
+      });
+      const { error: localOrderError } = await (supabaseAdmin as any)
+        .from("checkout_orders")
+        .update({ provider: "local" })
+        .eq("id", hold.order_id);
+      if (localOrderError) throw new Error(localOrderError.message);
+      const { error: localAttemptError } = await (supabaseAdmin as any)
+        .from("payment_attempts")
+        .insert({
+          id: paymentAttemptId,
+          checkout_order_id: hold.order_id,
+          provider: "local",
+          provider_order_id: `LOCAL-${hold.order_id}`,
+          provider_payment_id: `LOCAL-PAY-${paymentAttemptId}`,
+          payment_method: "pix",
+          status: "pending",
+          amount_cents: hold.amount_cents,
+          qr_code: pixCopyPaste,
+          qr_code_base64: qrCodeDataUrl,
+          expires_at: hold.expires_at,
+          provider_payload: { simulated: true, kind: "class_plan" },
+        });
+      if (localAttemptError) throw new Error(localAttemptError.message);
+      return {
+        orderId: hold.order_id,
+        paymentId: paymentAttemptId,
+        bookingIds: [],
+        sessionIds: [],
+        amountCents: hold.amount_cents,
+        pixCopyPaste,
+        qrCodeDataUrl,
+        expiresAt: hold.expires_at,
+        status: "pending" as const,
+        description: hold.description,
+        kind: "class_plan" as const,
+      };
+    }
+
+    let providerPayment: any;
+    try {
+      if (!productionPayer) throw new Error("Dados do pagador indisponiveis.");
+      providerPayment = await createMercadoPagoPix({
+        orderId: hold.order_id,
+        idempotencyKey: hold.idempotency_key,
+        amountCents: hold.amount_cents,
+        description: hold.description,
+        expiresAt: hold.expires_at,
+        payer: productionPayer,
+      });
+    } catch (error) {
+      console.error("[MercadoPago] Plan Pix creation failed", {
+        orderId: hold.order_id,
+        error: safeMercadoPagoError(error),
+      });
+      await releaseFailedCheckoutHold({
+        orderId: hold.order_id,
+        userId: context.userId,
+        reason: "plan_pix_creation_failed",
+      });
+      throw new Error("Nao foi possivel gerar o Pix do plano agora. Tente novamente.");
+    }
+
+    const providerPaymentId = String(providerPayment.id ?? "");
+    const transaction = providerPayment.point_of_interaction?.transaction_data;
+    const qrCode = transaction?.qr_code ?? "";
+    const qrCodeBase64 = transaction?.qr_code_base64 ?? "";
+    if (!providerPaymentId || !qrCode || !qrCodeBase64) {
+      await releaseFailedCheckoutHold({
+        orderId: hold.order_id,
+        userId: context.userId,
+        providerPaymentId,
+        reason: "incomplete_plan_pix_payload",
+      });
+      throw new Error("O Mercado Pago nao retornou os dados completos do Pix.");
+    }
+
+    let paymentAttemptId = crypto.randomUUID();
+    const initialPaymentStatus = mercadoPagoPaymentStatus(
+      providerPayment.status,
+      providerPayment.status_detail,
+    );
+    const paymentValidation = validateMercadoPagoPaymentForOrder(providerPayment, {
+      id: hold.order_id,
+      amount_cents: hold.amount_cents,
+      currency: "BRL",
+    });
+    const { error: attemptError } = await (supabaseAdmin as any).from("payment_attempts").insert({
+      id: paymentAttemptId,
+      checkout_order_id: hold.order_id,
+      provider: "mercado_pago",
+      provider_order_id: null,
+      provider_payment_id: providerPaymentId,
+      payment_method: "pix",
+      status: initialPaymentStatus,
+      amount_cents: hold.amount_cents,
+      qr_code: qrCode,
+      qr_code_base64: qrCodeBase64,
+      ticket_url: transaction?.ticket_url ?? null,
+      expires_at: providerPayment.date_of_expiration ?? hold.expires_at,
+      paid_at: providerPayment.date_approved ?? null,
+      provider_payload: safeMercadoPagoPayload(providerPayment),
+    });
+    if (attemptError) {
+      const { data: concurrentAttempt } = await (supabaseAdmin as any)
+        .from("payment_attempts")
+        .select("id, checkout_order_id, status")
+        .eq("provider", "mercado_pago")
+        .eq("provider_payment_id", providerPaymentId)
+        .maybeSingle();
+      if (concurrentAttempt?.checkout_order_id === hold.order_id) {
+        paymentAttemptId = concurrentAttempt.id;
+        if (
+          paymentValidation.valid &&
+          initialPaymentStatus === "paid" &&
+          concurrentAttempt.status !== "paid"
+        ) {
+          const { data: reconciledAttempt, error: reconcileAttemptError } = await (
+            supabaseAdmin as any
+          )
+            .from("payment_attempts")
+            .update({
+              status: "paid",
+              paid_at: providerPayment.date_approved ?? new Date().toISOString(),
+              provider_payload: safeMercadoPagoPayload(providerPayment),
+            })
+            .eq("id", concurrentAttempt.id)
+            .eq("checkout_order_id", hold.order_id)
+            .in("status", ["pending", "expired", "cancelled", "failed", "paid_needs_review"])
+            .select("id")
+            .maybeSingle();
+          if (reconcileAttemptError || !reconciledAttempt) {
+            await flagPaymentForReview(
+              hold.order_id,
+              "Pagamento de plano aprovado, mas a tentativa concorrente nao pode ser conciliada.",
+            );
+            throw new Error("Pagamento aprovado e em conciliacao. Nao faca outro pagamento.");
+          }
+        }
+      } else {
+        console.error("[MercadoPago] Failed to persist plan payment attempt", {
+          orderId: hold.order_id,
+          providerPaymentId,
+          error: attemptError.message,
+        });
+        await releaseFailedCheckoutHold({
+          orderId: hold.order_id,
+          userId: context.userId,
+          providerPaymentId,
+          reason: "plan_payment_attempt_persist_failed",
+        });
+        throw new Error("Pix criado, mas a confirmacao local falhou. Tente novamente.");
+      }
+    }
+
+    if (!paymentValidation.valid) {
+      const reason = "Divergencia de valor, moeda, metodo ou referencia externa.";
+      if (initialPaymentStatus === "paid" || initialPaymentStatus === "paid_needs_review") {
+        await flagPaymentForReview(hold.order_id, reason);
+        throw new Error("Pagamento recebido e em analise. Nao faca outro pagamento.");
+      }
+      await releaseFailedCheckoutHold({
+        orderId: hold.order_id,
+        userId: context.userId,
+        providerPaymentId,
+        reason: "plan_payment_reconciliation_failed",
+      });
+      throw new Error("O Pix retornou dados inconsistentes e foi cancelado com seguranca.");
+    }
+
+    if (initialPaymentStatus === "paid_needs_review") {
+      await flagPaymentForReview(
+        hold.order_id,
+        "Pagamento de plano criado com status que exige conferencia manual.",
+      );
+      throw new Error("Pagamento recebido e em analise. Nao faca outro pagamento.");
+    }
+
+    if (["cancelled", "failed", "expired", "refunded"].includes(initialPaymentStatus)) {
+      const terminalPatch =
+        initialPaymentStatus === "refunded"
+          ? { status: "refunded", refunded_at: new Date().toISOString() }
+          : initialPaymentStatus === "cancelled"
+            ? { status: "cancelled", cancelled_at: new Date().toISOString() }
+            : { status: initialPaymentStatus };
+      await (supabaseAdmin as any)
+        .from("checkout_orders")
+        .update(terminalPatch)
+        .eq("id", hold.order_id)
+        .eq("status", "pending");
+      throw new Error("O Pix nao ficou disponivel. Gere uma nova cobranca.");
+    }
+
+    if (initialPaymentStatus === "paid") {
+      const { data: paidOrder, error: paidOrderError } = await (supabaseAdmin as any)
+        .from("checkout_orders")
+        .update({
+          status: "paid",
+          paid_at: providerPayment.date_approved ?? new Date().toISOString(),
+        })
+        .eq("id", hold.order_id)
+        .eq("status", "pending")
+        .select("status")
+        .maybeSingle();
+      if (paidOrderError || !paidOrder) {
+        const { data: persistedOrder } = await (supabaseAdmin as any)
+          .from("checkout_orders")
+          .select("status")
+          .eq("id", hold.order_id)
+          .maybeSingle();
+        if (persistedOrder?.status !== "paid") {
+          await flagPaymentForReview(
+            hold.order_id,
+            "Pagamento aprovado, mas a liberacao atomica dos creditos falhou.",
+          );
+          throw new Error("Pagamento aprovado e em conciliacao. Nao faca outro pagamento.");
+        }
+      }
+    }
+
+    return {
+      orderId: hold.order_id,
+      paymentId: paymentAttemptId,
+      bookingIds: [],
+      sessionIds: [],
+      amountCents: hold.amount_cents,
+      pixCopyPaste: qrCode,
+      qrCodeDataUrl: `data:image/png;base64,${qrCodeBase64}`,
+      expiresAt: providerPayment.date_of_expiration ?? hold.expires_at,
+      status: initialPaymentStatus === "paid" ? ("paid" as const) : ("pending" as const),
+      description: hold.description,
+      kind: "class_plan" as const,
     };
   });
 
@@ -539,6 +841,7 @@ export const syncBookingPixCheckoutServer = createServerFn({ method: "POST" })
     } else if (
       mappedStatus === "paid" &&
       order.status === "pending" &&
+      order.kind === "booking" &&
       !(await hasCompleteActiveBookingHold(order))
     ) {
       processingError = "Pagamento aprovado sem todas as reservas ativas; conferir manualmente.";
@@ -599,13 +902,10 @@ export const approveLocalPixCheckoutServer = createServerFn({ method: "POST" })
       throw new Error("Esta cobranca nao esta mais disponivel.");
     }
 
-    const { error: approvalError } = await (supabaseAdmin as any).rpc(
-      "approve_local_booking_checkout",
-      {
-        p_order_id: order.id,
-        p_user_id: context.userId,
-      },
-    );
+    const { error: approvalError } = await (supabaseAdmin as any).rpc("approve_local_checkout", {
+      p_order_id: order.id,
+      p_user_id: context.userId,
+    });
     if (approvalError) throw new Error(approvalError.message);
 
     return { status: "paid" as const };

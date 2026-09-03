@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   CircleDollarSign,
+  Clock3,
   Eye,
   Facebook,
   Globe,
@@ -76,6 +77,8 @@ function ConfigPage() {
   const [products, setProducts] = useState<BookingProduct[]>([]);
   const [productDrafts, setProductDrafts] = useState<Record<string, string>>({});
   const [savingProductId, setSavingProductId] = useState<string | null>(null);
+  const [cancellationNoticeHours, setCancellationNoticeHours] = useState(24);
+  const [savingCancellation, setSavingCancellation] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -83,6 +86,7 @@ function ConfigPage() {
       const keys = [
         "whatsapp_number",
         "whatsapp_message",
+        "cancellation_notice_hours",
         ...SOCIAL_KEYS.map((k) => `social_${k}`),
         ...profKeys,
       ];
@@ -98,6 +102,10 @@ function ConfigPage() {
       const map = Object.fromEntries(((data as any[]) ?? []).map((r) => [r.key, r.value ?? ""]));
       setWhatsapp(map["whatsapp_number"] ?? "");
       setWhatsappMsg(map["whatsapp_message"] ?? "");
+      const noticeHours = Number(map["cancellation_notice_hours"] ?? 24);
+      setCancellationNoticeHours(
+        Number.isInteger(noticeHours) && noticeHours >= 0 && noticeHours <= 720 ? noticeHours : 24,
+      );
       setSocials({
         instagram: map["social_instagram"] ?? "",
         facebook: map["social_facebook"] ?? "",
@@ -198,6 +206,30 @@ function ConfigPage() {
     }
     setWhatsapp(clean);
     toast.success("WhatsApp atualizado");
+  };
+
+  const saveCancellationPolicy = async () => {
+    playPop();
+    if (
+      !Number.isInteger(cancellationNoticeHours) ||
+      cancellationNoticeHours < 0 ||
+      cancellationNoticeHours > 720
+    ) {
+      toast.error("Informe um prazo entre 0 e 720 horas.");
+      return;
+    }
+    setSavingCancellation(true);
+    const { error } = await (supabase as any)
+      .from("site_settings")
+      .upsert([{ key: "cancellation_notice_hours", value: String(cancellationNoticeHours) }], {
+        onConflict: "key",
+      });
+    setSavingCancellation(false);
+    if (error) {
+      toast.error("Não foi possível salvar a regra de cancelamento.");
+      return;
+    }
+    toast.success("Prazo de cancelamento atualizado");
   };
 
   const saveSocials = async () => {
@@ -333,6 +365,57 @@ function ConfigPage() {
               </div>
             ))}
         </div>
+      </section>
+
+      <section className="plane">
+        <div className="mb-4 flex items-start gap-3">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+            <Clock3 className="h-4 w-4" />
+          </span>
+          <div>
+            <h2 className="type-h3">Cancelamento de aulas com crédito</h2>
+            <p className="type-micro text-muted-foreground">
+              Dentro do prazo, o aluno recupera o crédito. Depois do prazo, a vaga é liberada, mas o
+              crédito não retorna.
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3 sm:max-w-md sm:flex-row sm:items-end">
+          <label className="block flex-1">
+            <span className="mb-1 block type-micro text-muted-foreground">
+              Antecedência mínima em horas
+            </span>
+            <input
+              type="number"
+              min={0}
+              max={720}
+              step={1}
+              value={cancellationNoticeHours}
+              onChange={(event) => setCancellationNoticeHours(Number(event.target.value))}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void saveCancellationPolicy()}
+            disabled={savingCancellation}
+            className="btn-bounce inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            {savingCancellation ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Salvar prazo
+          </button>
+        </div>
+        <p className="mt-2 type-micro text-muted-foreground">
+          {cancellationNoticeHours === 0
+            ? "O crédito será devolvido até o início da aula."
+            : cancellationNoticeHours % 24 === 0
+              ? `Equivale a ${cancellationNoticeHours / 24} ${cancellationNoticeHours === 24 ? "dia" : "dias"}.`
+              : `O aluno precisa avisar com pelo menos ${cancellationNoticeHours} horas.`}
+        </p>
       </section>
 
       <section className="plane">

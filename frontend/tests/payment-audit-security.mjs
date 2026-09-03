@@ -57,6 +57,21 @@ async function createTemporaryUser(label) {
   return { id: data.user.id, client };
 }
 
+async function removeTemporaryUser(userId) {
+  const ownedRows = [
+    ["notifications", "user_id"],
+    ["booking_reschedules", "user_id"],
+    ["bookings", "user_id"],
+    ["checkout_orders", "user_id"],
+  ];
+  for (const [table, column] of ownedRows) {
+    const { error } = await admin.from(table).delete().eq(column, userId);
+    if (error) throw new Error(`${table}: ${error.message}`);
+  }
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) throw error;
+}
+
 function isoDateFromNow(days) {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() + days);
@@ -333,7 +348,12 @@ try {
   console.log("PASS: partial browser cancellation and checkout flooding are blocked.");
 } finally {
   for (const userId of createdUserIds.reverse()) {
-    const { error } = await admin.auth.admin.deleteUser(userId);
-    if (error) console.error(`WARN: failed to remove temporary user ${userId}: ${error.message}`);
+    try {
+      await removeTemporaryUser(userId);
+    } catch (error) {
+      console.error(
+        `WARN: failed to remove temporary user ${userId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 }

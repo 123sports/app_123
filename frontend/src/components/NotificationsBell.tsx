@@ -3,11 +3,7 @@ import { Bell } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -68,7 +64,9 @@ export function NotificationsBell() {
             if (
               n.kind === "booking_confirmed" ||
               n.kind === "payment_paid" ||
-              n.kind === "booking_rescheduled"
+              n.kind === "booking_rescheduled" ||
+              n.kind === "credits_granted" ||
+              n.kind === "credit_booking_confirmed"
             ) {
               toast.success(n.title, { description: n.body ?? undefined });
             } else if (n.kind === "payment_review") {
@@ -95,7 +93,16 @@ export function NotificationsBell() {
   };
 
   return (
-    <Popover open={open} onOpenChange={(v) => { setOpen(v); if (v) { playPop(); markAllRead(); } }}>
+    <Popover
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (v) {
+          playPop();
+          markAllRead();
+        }
+      }}
+    >
       <PopoverTrigger asChild>
         <button
           className="btn-bounce relative rounded-full border border-border bg-card p-2 hover:bg-secondary"

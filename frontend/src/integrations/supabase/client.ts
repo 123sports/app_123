@@ -36,6 +36,11 @@ const LOCAL_PAYMENT_ATTEMPTS_KEY = 'on_tennis_local_payment_attempts';
 const LOCAL_BOOKING_RESCHEDULES_KEY = 'on_tennis_local_booking_reschedules';
 const LOCAL_NOTIFICATIONS_KEY = 'on_tennis_local_notifications';
 const LOCAL_STAFF_INVITES_KEY = 'on_tennis_local_staff_invites';
+const LOCAL_CLASS_PLANS_KEY = 'on_tennis_local_class_plans';
+const LOCAL_CREDIT_GRANTS_KEY = 'on_tennis_local_credit_grants';
+const LOCAL_CREDIT_ALLOCATIONS_KEY = 'on_tennis_local_credit_allocations';
+const LOCAL_CREDIT_LEDGER_KEY = 'on_tennis_local_credit_ledger';
+const LOCAL_SITE_SETTINGS_KEY = 'on_tennis_local_site_settings';
 
 const defaultLocalProfile = {
   id: localUser.id,
@@ -195,6 +200,50 @@ const localPricing = [
   },
 ];
 
+const localClassPlans = [
+  {
+    id: '20000000-0000-4000-8000-000000000001',
+    frequency_per_week: 1,
+    duration_months: 1,
+    price_cents: 25000,
+    title: 'Individual avulsa',
+    description: 'Uma aula individual com o professor.',
+    active: true,
+    modality: 'Individual',
+    class_duration_min: 60,
+    credit_modality: 'individual',
+    credit_quantity: 1,
+  },
+  {
+    id: '10000000-0000-4000-8000-000000000001',
+    frequency_per_week: 1,
+    duration_months: 1,
+    price_cents: 29000,
+    title: 'Grupo mensal',
+    description: 'Quatro créditos para aulas em grupo.',
+    active: true,
+    modality: 'Grupo',
+    class_duration_min: 60,
+    credit_modality: 'grupo',
+    credit_quantity: 4,
+  },
+  {
+    id: '30000000-0000-4000-8000-000000000001',
+    frequency_per_week: 1,
+    duration_months: 1,
+    price_cents: 50000,
+    title: 'Dupla mensal',
+    description: 'Quatro créditos por aluno para aulas em dupla.',
+    active: true,
+    modality: 'Dupla',
+    class_duration_min: 60,
+    credit_modality: 'dupla',
+    credit_quantity: 4,
+  },
+];
+
+const localSiteSettings = [{ key: 'cancellation_notice_hours', value: '24' }];
+
 function hasSupabaseConfig() {
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
   const SUPABASE_PUBLISHABLE_KEY =
@@ -289,6 +338,16 @@ function localStorageKeyForTable(table: string) {
       return LOCAL_NOTIFICATIONS_KEY;
     case 'staff_invites':
       return LOCAL_STAFF_INVITES_KEY;
+    case 'class_plans':
+      return LOCAL_CLASS_PLANS_KEY;
+    case 'student_credit_grants':
+      return LOCAL_CREDIT_GRANTS_KEY;
+    case 'student_credit_allocations':
+      return LOCAL_CREDIT_ALLOCATIONS_KEY;
+    case 'student_credit_ledger':
+      return LOCAL_CREDIT_LEDGER_KEY;
+    case 'site_settings':
+      return LOCAL_SITE_SETTINGS_KEY;
     default:
       return null;
   }
@@ -314,6 +373,11 @@ function normalizeLocalRow(table: string, row: Record<string, any>) {
     booking_reschedules: 'local-reschedule',
     notifications: 'local-notification',
     staff_invites: 'local-staff-invite',
+    class_plans: 'local-class-plan',
+    student_credit_grants: 'local-credit-grant',
+    student_credit_allocations: 'local-credit-allocation',
+    student_credit_ledger: 'local-credit-ledger',
+    site_settings: 'local-setting',
   };
   const normalized = {
     ...row,
@@ -321,6 +385,16 @@ function normalizeLocalRow(table: string, row: Record<string, any>) {
     created_at: row.created_at ?? now,
     updated_at: row.updated_at ?? now,
   };
+  if (table === 'student_credit_ledger') {
+    const lastSequence = readLocalCollection(LOCAL_CREDIT_LEDGER_KEY).reduce(
+      (highest: number, entry: any) => Math.max(highest, Number(entry.sequence_no) || 0),
+      0,
+    );
+    return {
+      ...normalized,
+      sequence_no: row.sequence_no ?? lastSequence + 1,
+    };
+  }
   if (table === 'staff_invites') {
     return {
       ...normalized,
@@ -391,7 +465,9 @@ function localRowsFor(table: string): any[] {
             my_booking_id: mine?.id ?? null,
             my_booking_status: mine?.status ?? null,
             my_payment_status: mine?.payment_status ?? null,
+            my_payment_method: mine?.payment_method ?? null,
             my_checkout_order_id: mine?.checkout_order_id ?? null,
+            my_credit_grant_id: mine?.credit_grant_id ?? null,
             my_hold_expires_at: mine?.hold_expires_at ?? null,
             updated_at: session.updated_at,
           };
@@ -412,6 +488,51 @@ function localRowsFor(table: string): any[] {
       return readLocalCollection(LOCAL_NOTIFICATIONS_KEY);
     case 'staff_invites':
       return readLocalCollection(LOCAL_STAFF_INVITES_KEY);
+    case 'class_plans':
+      return readLocalCollection(LOCAL_CLASS_PLANS_KEY, localClassPlans);
+    case 'student_credit_grants':
+      return readLocalCollection(LOCAL_CREDIT_GRANTS_KEY);
+    case 'student_credit_allocations':
+      return readLocalCollection(LOCAL_CREDIT_ALLOCATIONS_KEY);
+    case 'student_credit_ledger':
+      return readLocalCollection(LOCAL_CREDIT_LEDGER_KEY);
+    case 'student_credit_balances': {
+      const ledger = readLocalCollection(LOCAL_CREDIT_LEDGER_KEY);
+      return readLocalCollection(LOCAL_CREDIT_GRANTS_KEY).map((grant: any) => ({
+        grant_id: grant.id,
+        user_id: grant.user_id,
+        class_plan_id: grant.class_plan_id,
+        checkout_order_id: grant.checkout_order_id,
+        modality: grant.modality,
+        credits_granted: grant.credits_granted,
+        available_credits: ledger
+          .filter((entry: any) => entry.grant_id === grant.id)
+          .reduce((sum: number, entry: any) => sum + Number(entry.credit_delta || 0), 0),
+        amount_paid_cents: grant.amount_paid_cents,
+        plan_snapshot: grant.plan_snapshot,
+        status: grant.status,
+        granted_at: grant.granted_at,
+        refunded_at: grant.refunded_at,
+      }));
+    }
+    case 'student_credit_summary': {
+      const summary = new Map<string, any>();
+      for (const balance of localRowsFor('student_credit_balances')) {
+        if (balance.status !== 'active') continue;
+        const current = summary.get(balance.modality) ?? {
+          user_id: balance.user_id,
+          modality: balance.modality,
+          available_credits: 0,
+          credits_acquired: 0,
+        };
+        current.available_credits += balance.available_credits;
+        current.credits_acquired += balance.credits_granted;
+        summary.set(balance.modality, current);
+      }
+      return [...summary.values()];
+    }
+    case 'site_settings':
+      return readLocalCollection(LOCAL_SITE_SETTINGS_KEY, localSiteSettings);
     case 'rpc:list_active_professors':
       return [
         {

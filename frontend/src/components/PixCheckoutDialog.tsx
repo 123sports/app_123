@@ -31,6 +31,7 @@ function remainingSeconds(expiresAt: string) {
 
 export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }: Props) {
   const isLocal = isLocalPaymentMode();
+  const isPlan = initialCheckout.kind === "class_plan";
   const [checkout, setCheckout] = useState(initialCheckout);
   const [remaining, setRemaining] = useState(() => remainingSeconds(initialCheckout.expiresAt));
   const [approving, setApproving] = useState(false);
@@ -62,7 +63,11 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
         setCheckout(current);
         if (current.status === "paid") {
           window.clearInterval(poll);
-          toast.success("Pagamento confirmado e reserva garantida");
+          toast.success(
+            current.kind === "class_plan"
+              ? "Pagamento confirmado e créditos liberados"
+              : "Pagamento confirmado e reserva garantida",
+          );
           onPaid(current);
         }
       } catch {
@@ -88,7 +93,11 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
     try {
       const paid = await approveLocalPixCheckout(checkout);
       setCheckout(paid);
-      toast.success("Pagamento aprovado e reserva confirmada");
+      toast.success(
+        paid.kind === "class_plan"
+          ? "Pagamento aprovado e créditos liberados"
+          : "Pagamento aprovado e reserva confirmada",
+      );
       onPaid(paid);
     } catch (error: any) {
       toast.error(error?.message ?? "Não foi possível aprovar o pagamento.");
@@ -129,7 +138,9 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
             <CheckCircle2 className="h-14 w-14 text-primary" />
             <div className="mt-4 text-xl font-bold">{brl(checkout.amountCents)}</div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Sua reserva está confirmada. Você pode consultá-la na Agenda.
+              {isPlan
+                ? "Seus créditos já estão disponíveis em Minhas Aulas e podem ser usados na Agenda."
+                : "Sua reserva está confirmada. Você pode consultá-la na Agenda."}
             </p>
           </div>
         ) : needsReview ? (
@@ -153,7 +164,9 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
             <Clock3 className="h-12 w-12 text-muted-foreground" />
             <p className="mt-4 font-medium">Este Pix expirou ou foi cancelado.</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Volte à agenda para gerar uma nova cobrança.
+              {isPlan
+                ? "Volte a Minhas Aulas para gerar uma nova cobrança."
+                : "Volte à Agenda para gerar uma nova cobrança."}
             </p>
           </div>
         ) : (

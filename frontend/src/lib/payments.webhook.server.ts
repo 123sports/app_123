@@ -287,6 +287,7 @@ export async function handleMercadoPagoWebhook(request: Request) {
   } else if (
     mappedStatus === "paid" &&
     order.status === "pending" &&
+    order.kind === "booking" &&
     !(await hasCompleteActiveBookingHold(order))
   ) {
     processingError = "Pagamento aprovado sem todas as reservas ativas; conferir manualmente.";

@@ -154,6 +154,7 @@ export type Database = {
           checkout_order_id: string | null
           confirmed_at: string | null
           created_at: string
+          credit_grant_id: string | null
           duration_hours: number
           hold_expires_at: string | null
           id: string
@@ -177,6 +178,7 @@ export type Database = {
           checkout_order_id?: string | null
           confirmed_at?: string | null
           created_at?: string
+          credit_grant_id?: string | null
           duration_hours?: number
           hold_expires_at?: string | null
           id?: string
@@ -200,6 +202,7 @@ export type Database = {
           checkout_order_id?: string | null
           confirmed_at?: string | null
           created_at?: string
+          credit_grant_id?: string | null
           duration_hours?: number
           hold_expires_at?: string | null
           id?: string
@@ -221,6 +224,20 @@ export type Database = {
             columns: ["checkout_order_id"]
             isOneToOne: false
             referencedRelation: "checkout_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_credit_grant_id_fkey"
+            columns: ["credit_grant_id"]
+            isOneToOne: false
+            referencedRelation: "student_credit_balances"
+            referencedColumns: ["grant_id"]
+          },
+          {
+            foreignKeyName: "bookings_credit_grant_id_fkey"
+            columns: ["credit_grant_id"]
+            isOneToOne: false
+            referencedRelation: "student_credit_grants"
             referencedColumns: ["id"]
           },
           {
@@ -467,11 +484,48 @@ export type Database = {
           },
         ]
       }
+      class_plan_change_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          class_plan_id: string
+          id: string
+          new_values: Json
+          old_values: Json
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          class_plan_id: string
+          id?: string
+          new_values: Json
+          old_values: Json
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          class_plan_id?: string
+          id?: string
+          new_values?: Json
+          old_values?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "class_plan_change_history_class_plan_id_fkey"
+            columns: ["class_plan_id"]
+            isOneToOne: false
+            referencedRelation: "class_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       class_plans: {
         Row: {
           active: boolean
           class_duration_min: number
           created_at: string
+          credit_modality: string
+          credit_quantity: number
           description: string | null
           duration_months: number
           frequency_per_week: number
@@ -485,6 +539,8 @@ export type Database = {
           active?: boolean
           class_duration_min?: number
           created_at?: string
+          credit_modality: string
+          credit_quantity: number
           description?: string | null
           duration_months: number
           frequency_per_week: number
@@ -498,6 +554,8 @@ export type Database = {
           active?: boolean
           class_duration_min?: number
           created_at?: string
+          credit_modality?: string
+          credit_quantity?: number
           description?: string | null
           duration_months?: number
           frequency_per_week?: number
@@ -1591,6 +1649,198 @@ export type Database = {
         }
         Relationships: []
       }
+      student_credit_allocations: {
+        Row: {
+          booking_id: string
+          grant_id: string
+          id: string
+          reserved_at: string
+          resolved_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          booking_id: string
+          grant_id: string
+          id?: string
+          reserved_at?: string
+          resolved_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          booking_id?: string
+          grant_id?: string
+          id?: string
+          reserved_at?: string
+          resolved_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_credit_allocations_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: true
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_credit_allocations_grant_id_fkey"
+            columns: ["grant_id"]
+            isOneToOne: false
+            referencedRelation: "student_credit_balances"
+            referencedColumns: ["grant_id"]
+          },
+          {
+            foreignKeyName: "student_credit_allocations_grant_id_fkey"
+            columns: ["grant_id"]
+            isOneToOne: false
+            referencedRelation: "student_credit_grants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_credit_grants: {
+        Row: {
+          amount_paid_cents: number
+          checkout_order_id: string
+          class_plan_id: string
+          credits_granted: number
+          granted_at: string
+          id: string
+          modality: string
+          plan_snapshot: Json
+          refunded_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          amount_paid_cents: number
+          checkout_order_id: string
+          class_plan_id: string
+          credits_granted: number
+          granted_at?: string
+          id?: string
+          modality: string
+          plan_snapshot: Json
+          refunded_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          amount_paid_cents?: number
+          checkout_order_id?: string
+          class_plan_id?: string
+          credits_granted?: number
+          granted_at?: string
+          id?: string
+          modality?: string
+          plan_snapshot?: Json
+          refunded_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_credit_grants_checkout_order_id_fkey"
+            columns: ["checkout_order_id"]
+            isOneToOne: true
+            referencedRelation: "checkout_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_credit_grants_class_plan_id_fkey"
+            columns: ["class_plan_id"]
+            isOneToOne: false
+            referencedRelation: "class_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_credit_ledger: {
+        Row: {
+          actor_user_id: string | null
+          booking_id: string | null
+          checkout_order_id: string | null
+          created_at: string
+          credit_delta: number
+          entry_hash: string
+          entry_type: string
+          grant_id: string
+          id: string
+          idempotency_key: string
+          metadata: Json
+          previous_hash: string
+          reason: string
+          sequence_no: number
+          user_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          booking_id?: string | null
+          checkout_order_id?: string | null
+          created_at?: string
+          credit_delta: number
+          entry_hash: string
+          entry_type: string
+          grant_id: string
+          id?: string
+          idempotency_key: string
+          metadata?: Json
+          previous_hash: string
+          reason: string
+          sequence_no?: number
+          user_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          booking_id?: string | null
+          checkout_order_id?: string | null
+          created_at?: string
+          credit_delta?: number
+          entry_hash?: string
+          entry_type?: string
+          grant_id?: string
+          id?: string
+          idempotency_key?: string
+          metadata?: Json
+          previous_hash?: string
+          reason?: string
+          sequence_no?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_credit_ledger_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_credit_ledger_checkout_order_id_fkey"
+            columns: ["checkout_order_id"]
+            isOneToOne: false
+            referencedRelation: "checkout_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_credit_ledger_grant_id_fkey"
+            columns: ["grant_id"]
+            isOneToOne: false
+            referencedRelation: "student_credit_balances"
+            referencedColumns: ["grant_id"]
+          },
+          {
+            foreignKeyName: "student_credit_ledger_grant_id_fkey"
+            columns: ["grant_id"]
+            isOneToOne: false
+            referencedRelation: "student_credit_grants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       student_evaluations: {
         Row: {
           booking_id: string | null
@@ -1785,7 +2035,9 @@ export type Database = {
           my_booking_id: string | null
           my_booking_status: string | null
           my_checkout_order_id: string | null
+          my_credit_grant_id: string | null
           my_hold_expires_at: string | null
+          my_payment_method: string | null
           my_payment_status: string | null
           occupied_seats: number | null
           product_type: Database["public"]["Enums"]["booking_type"] | null
@@ -1804,7 +2056,9 @@ export type Database = {
           my_booking_id?: never
           my_booking_status?: never
           my_checkout_order_id?: never
+          my_credit_grant_id?: never
           my_hold_expires_at?: never
+          my_payment_method?: never
           my_payment_status?: never
           occupied_seats?: never
           product_type?: Database["public"]["Enums"]["booking_type"] | null
@@ -1823,7 +2077,9 @@ export type Database = {
           my_booking_id?: never
           my_booking_status?: never
           my_checkout_order_id?: never
+          my_credit_grant_id?: never
           my_hold_expires_at?: never
+          my_payment_method?: never
           my_payment_status?: never
           occupied_seats?: never
           product_type?: Database["public"]["Enums"]["booking_type"] | null
@@ -1832,6 +2088,32 @@ export type Database = {
           start_hour?: number | null
           unit_price_cents?: number | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      student_credit_balances: {
+        Row: {
+          amount_paid_cents: number | null
+          available_credits: number | null
+          checkout_order_id: string | null
+          class_plan_id: string | null
+          credits_granted: number | null
+          grant_id: string | null
+          granted_at: string | null
+          modality: string | null
+          plan_snapshot: Json | null
+          refunded_at: string | null
+          status: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
+      student_credit_summary: {
+        Row: {
+          available_credits: number | null
+          credits_acquired: number | null
+          modality: string | null
+          user_id: string | null
         }
         Relationships: []
       }
@@ -1884,9 +2166,17 @@ export type Database = {
         Args: { p_order_id: string; p_user_id: string }
         Returns: undefined
       }
+      approve_local_checkout: {
+        Args: { p_order_id: string; p_user_id: string }
+        Returns: undefined
+      }
       cancel_booking_checkout: {
         Args: { p_order_id: string; p_user_id: string }
         Returns: undefined
+      }
+      cancel_credit_booking: {
+        Args: { p_booking_id: string; p_user_id: string }
+        Returns: Json
       }
       cleanup_expired_booking_holds: { Args: never; Returns: number }
       create_booking_checkout_hold: {
@@ -1895,6 +2185,20 @@ export type Database = {
           p_booking_type: Database["public"]["Enums"]["booking_type"]
           p_hours: number[]
           p_professor_id?: string | null
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      create_class_plan_checkout: {
+        Args: { p_plan_id: string; p_user_id: string }
+        Returns: Json
+      }
+      create_credit_booking: {
+        Args: {
+          p_booking_date: string
+          p_booking_type: Database["public"]["Enums"]["booking_type"]
+          p_professor_id?: string | null
+          p_start_hour: number
           p_user_id: string
         }
         Returns: Json
@@ -1986,6 +2290,13 @@ export type Database = {
         Args: { _booking_id: string; _user_id: string }
         Returns: boolean
       }
+      is_credit_modality_compatible: {
+        Args: {
+          p_booking_type: Database["public"]["Enums"]["booking_type"]
+          p_modality: string
+        }
+        Returns: boolean
+      }
       is_master_admin: { Args: { _user_id: string }; Returns: boolean }
       is_open_match_creator: {
         Args: { _match_id: string; _user_id: string }
@@ -2015,6 +2326,10 @@ export type Database = {
           phone: string
           skill_level: string
         }[]
+      }
+      verify_student_credit_ledger: {
+        Args: { p_user_id: string }
+        Returns: Json
       }
     }
     Enums: {

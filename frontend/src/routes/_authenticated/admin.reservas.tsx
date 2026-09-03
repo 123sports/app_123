@@ -27,6 +27,7 @@ type Row = {
   id: string;
   session_id: string | null;
   checkout_order_id: string | null;
+  credit_grant_id: string | null;
   session_capacity: number;
   occupied_seats: number;
   user_id: string;
@@ -35,6 +36,7 @@ type Row = {
   type: string;
   status: string;
   payment_status: string;
+  payment_method: string | null;
   hold_expires_at: string | null;
   amount_cents: number | null;
   attended: boolean | null;
@@ -53,8 +55,25 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
   isento: "Isento",
 };
 
-function paymentStatusLabel(status: string) {
+function paymentStatusLabel(status: string, method?: string | null) {
+  if (status === "pago" && method === "credito_plano") return "Crédito do plano";
   return PAYMENT_STATUS_LABELS[status] ?? status;
+}
+
+function bookingValueLabel(
+  booking: Pick<Row, "payment_method" | "amount_cents" | "type">,
+  pricing: Record<string, number>,
+) {
+  return booking.payment_method === "credito_plano"
+    ? "1 crédito"
+    : brl(booking.amount_cents ?? pricing[booking.type] ?? 0);
+}
+
+function sessionValueLabel(rows: Row[], pricing: Record<string, number>) {
+  if (rows.every((row) => row.payment_method === "credito_plano")) return "1 crédito / aluno";
+  if (rows.some((row) => row.payment_method === "credito_plano")) return "Pix ou crédito";
+  const representative = rows[0];
+  return `${brl(representative.amount_cents ?? pricing[representative.type] ?? 0)} / aluno`;
 }
 
 function effectivePaymentStatus(row: Pick<Row, "payment_status" | "hold_expires_at">) {
@@ -88,6 +107,12 @@ function occupiesSession(row: Pick<Row, "status" | "payment_status" | "hold_expi
 }
 
 function allowedBookingStatuses(row: Row) {
+  if (row.credit_grant_id) {
+    if (row.status === "concluida") {
+      return STATUSES.filter((status) => status.key === "concluida");
+    }
+    return STATUSES.filter((status) => status.key === "confirmada" || status.key === "concluida");
+  }
   if (!row.checkout_order_id) return STATUSES;
   if (row.payment_status === "pago" && row.status === "confirmada") {
     return STATUSES.filter((status) => status.key === "confirmada" || status.key === "concluida");
@@ -101,7 +126,7 @@ function canRecordAttendance(row: Row) {
   );
 }
 
-function PaymentStatus({ status }: { status: string }) {
+function PaymentStatus({ status, method }: { status: string; method?: string | null }) {
   const color =
     status === "pago"
       ? "bg-primary/15 text-primary"
@@ -112,7 +137,7 @@ function PaymentStatus({ status }: { status: string }) {
     <span
       className={`inline-flex whitespace-nowrap rounded-full px-2 py-1 type-micro font-semibold ${color}`}
     >
-      {paymentStatusLabel(status)}
+      {paymentStatusLabel(status, method)}
     </span>
   );
 }
@@ -156,7 +181,7 @@ function AdminReservas() {
       supabase
         .from("bookings")
         .select(
-          "id, session_id, checkout_order_id, user_id, professor_id, booking_date, start_hour, type, status, payment_status, hold_expires_at, amount_cents, attended",
+          "id, session_id, checkout_order_id, credit_grant_id, user_id, professor_id, booking_date, start_hour, type, status, payment_status, payment_method, hold_expires_at, amount_cents, attended",
         )
         .order("booking_date", { ascending: false })
         .order("start_hour", { ascending: false })
@@ -267,7 +292,7 @@ function AdminReservas() {
             >
               <option value="all">Todos os pagamentos Pix</option>
               <option value="pendente">Aguardando Pix</option>
-              <option value="pago">Pix confirmado</option>
+              <option value="pago">Confirmado (Pix ou crédito)</option>
               <option value="expirado">Pix expirado</option>
               <option value="estornado">Pix estornado</option>
               <option value="cancelado">Cancelado</option>
@@ -355,7 +380,7 @@ function ProfessorReservationsView({
             >
               <option value="all">Todos os pagamentos Pix</option>
               <option value="pendente">Aguardando Pix</option>
-              <option value="pago">Pix confirmado</option>
+              <option value="pago">Confirmado (Pix ou crédito)</option>
             </select>
             <select
               value={statusFilter}
@@ -397,7 +422,8 @@ function ProfessorReservationsView({
                     {profiles[booking.user_id]?.full_name ?? "Aluno"}
                   </Link>
                   <div className="type-small text-muted-foreground">
-                    {booking.type.replace("_", " ")} · {paymentStatusLabel(booking.payment_status)}
+                    {booking.type.replace("_", " ")} ·{" "}
+                    {paymentStatusLabel(booking.payment_status, booking.payment_method)}
                   </div>
                   <div className="type-micro text-muted-foreground">{capacityLabel(booking)}</div>
                 </div>
@@ -457,14 +483,13 @@ function ListaView({
             <th className="p-3">Aluno</th>
             <th className="p-3">Tipo</th>
             <th className="p-3">Valor</th>
-            <th className="p-3">Pagamento Pix</th>
+            <th className="p-3">Pagamento</th>
             <th className="p-3">Status</th>
             <th className="p-3">Presença</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => {
-            const value = r.amount_cents ?? pricing[r.type] ?? 0;
             return (
               <tr key={r.id} className="border-b border-border/60">
                 <td className="p-3 whitespace-nowrap">
@@ -489,10 +514,12 @@ function ListaView({
                   <div className="mt-0.5 type-micro text-muted-foreground">{capacityLabel(r)}</div>
                 </td>
                 <td className="p-3">
-                  <span className="whitespace-nowrap type-data font-semibold">{brl(value)}</span>
+                  <span className="whitespace-nowrap type-data font-semibold">
+                    {bookingValueLabel(r, pricing)}
+                  </span>
                 </td>
                 <td className="p-3">
-                  <PaymentStatus status={r.payment_status} />
+                  <PaymentStatus status={r.payment_status} method={r.payment_method} />
                 </td>
                 <td className="p-3">
                   <select
@@ -676,7 +703,6 @@ function KanbanView({
           </div>
           <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
             {c.items.map((r) => {
-              const value = r.amount_cents ?? pricing[r.type] ?? 0;
               return (
                 <div
                   key={r.id}
@@ -701,7 +727,9 @@ function KanbanView({
                       {format(new Date(r.booking_date + "T00:00:00"), "dd/MM")} ·{" "}
                       {String(r.start_hour).padStart(2, "0")}h
                     </span>
-                    <span className="font-medium text-foreground type-data">{brl(value)}</span>
+                    <span className="font-medium text-foreground type-data">
+                      {bookingValueLabel(r, pricing)}
+                    </span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1">
                     {allowedBookingStatuses(r)
@@ -815,8 +843,7 @@ function AgendaView({
                           </div>
                         </div>
                         <span className="type-data font-semibold">
-                          {brl(representative.amount_cents ?? pricing[representative.type] ?? 0)} /
-                          aluno
+                          {sessionValueLabel(group, pricing)}
                         </span>
                       </div>
                       <div className="divide-y divide-border/60">
@@ -833,7 +860,7 @@ function AgendaView({
                                   {profiles[row.user_id]?.full_name ?? "Aluno"}
                                 </Link>
                                 <div className="type-micro text-muted-foreground">
-                                  {paymentStatusLabel(row.payment_status)} ·{" "}
+                                  {paymentStatusLabel(row.payment_status, row.payment_method)} ·{" "}
                                   {status?.label ?? row.status}
                                 </div>
                               </div>

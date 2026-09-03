@@ -127,7 +127,7 @@ function Dashboard() {
       </section>
 
       <section className="grid auto-rows-fr gap-4 md:grid-cols-3">
-        <StatCard icon={Trophy} label="Reservas pagas" value={stats.total} />
+        <StatCard icon={Trophy} label="Aulas reservadas" value={stats.total} />
         <StatCard icon={CalendarDays} label="Aulas neste mês" value={stats.this_month} />
         <StatCard icon={Clock} label="Antecedência máx." value="1 mês" />
       </section>

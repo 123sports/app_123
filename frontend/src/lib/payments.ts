@@ -5,6 +5,7 @@ import {
   approveLocalPixCheckoutServer,
   cancelBookingPixCheckoutServer,
   createBookingPixCheckoutServer,
+  createClassPlanPixCheckoutServer,
   syncBookingPixCheckoutServer,
 } from "@/lib/payments.functions";
 import { effectiveCheckoutStatus } from "@/lib/payment-security";
@@ -42,6 +43,7 @@ export type PixCheckout = {
     | "refunded"
     | "paid_needs_review";
   description: string;
+  kind: "booking" | "class_plan";
 };
 
 export type CreateBookingPixInput = {
@@ -50,6 +52,8 @@ export type CreateBookingPixInput = {
   bookingType: string;
   professorId: string | null;
 };
+
+export type CreateClassPlanPixInput = { planId: string };
 
 function uuid() {
   return crypto.randomUUID();
@@ -305,6 +309,98 @@ export async function createBookingPixCheckout(input: CreateBookingPixInput): Pr
     expiresAt,
     status: "pending",
     description,
+    kind: "booking",
+  };
+}
+
+export async function createClassPlanPixCheckout(
+  input: CreateClassPlanPixInput,
+): Promise<PixCheckout> {
+  if (!isLocalSupabaseMode()) {
+    return createClassPlanPixCheckoutServer({ data: input });
+  }
+
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) throw new Error("Sessão expirada.");
+  const { data: plan, error: planError } = await (supabase as any)
+    .from("class_plans")
+    .select("*")
+    .eq("id", input.planId)
+    .eq("active", true)
+    .maybeSingle();
+  if (planError || !plan || plan.price_cents <= 0 || plan.credit_quantity <= 0) {
+    throw new Error("Plano indisponível para compra.");
+  }
+
+  const orderId = uuid();
+  const paymentId = uuid();
+  const expiresAt = new Date(Date.now() + LOCAL_PIX_HOLD_MINUTES * 60 * 1000).toISOString();
+  const description = `${plan.title} - ${plan.credit_quantity} ${plan.credit_quantity === 1 ? "aula" : "aulas"}`;
+  const pixCopyPaste = fakePixPayload(orderId, plan.price_cents);
+  const qrCodeDataUrl = await QRCode.toDataURL(pixCopyPaste, {
+    errorCorrectionLevel: "M",
+    margin: 1,
+    width: 320,
+  });
+  const snapshot = {
+    plan_id: plan.id,
+    title: plan.title,
+    price_cents: plan.price_cents,
+    credit_quantity: plan.credit_quantity,
+    credit_modality: plan.credit_modality,
+    frequency_per_week: plan.frequency_per_week,
+    duration_months: plan.duration_months,
+    class_duration_min: plan.class_duration_min,
+  };
+
+  await (supabase as any).from("checkout_orders").insert({
+    id: orderId,
+    user_id: auth.user.id,
+    kind: "class_plan",
+    status: "pending",
+    currency: "BRL",
+    amount_cents: plan.price_cents,
+    description,
+    provider: "local",
+    expires_at: expiresAt,
+    metadata: { plan_snapshot: snapshot },
+  });
+  await (supabase as any).from("checkout_items").insert({
+    checkout_order_id: orderId,
+    item_type: "class_plan",
+    reference_id: plan.id,
+    description,
+    quantity: 1,
+    unit_amount_cents: plan.price_cents,
+    total_amount_cents: plan.price_cents,
+    metadata: snapshot,
+  });
+  await (supabase as any).from("payment_attempts").insert({
+    id: paymentId,
+    checkout_order_id: orderId,
+    provider: "local",
+    provider_order_id: `LOCAL-${orderId}`,
+    provider_payment_id: `LOCAL-PAY-${paymentId}`,
+    payment_method: "pix",
+    status: "pending",
+    amount_cents: plan.price_cents,
+    qr_code: pixCopyPaste,
+    qr_code_base64: qrCodeDataUrl,
+    expires_at: expiresAt,
+  });
+
+  return {
+    orderId,
+    paymentId,
+    bookingIds: [],
+    sessionIds: [],
+    amountCents: plan.price_cents,
+    pixCopyPaste,
+    qrCodeDataUrl,
+    expiresAt,
+    status: "pending",
+    description,
+    kind: "class_plan",
   };
 }
 
@@ -329,7 +425,7 @@ export async function getPixCheckout(orderId: string): Promise<PixCheckout> {
 
   const { data: order, error: orderError } = await (supabase as any)
     .from("checkout_orders")
-    .select("id, status, amount_cents, description, expires_at, metadata")
+    .select("id, kind, status, amount_cents, description, expires_at, metadata")
     .eq("id", orderId)
     .maybeSingle();
   const { data: payment, error: paymentError } = await (supabase as any)
@@ -373,6 +469,7 @@ export async function getPixCheckout(orderId: string): Promise<PixCheckout> {
     expiresAt: order.expires_at,
     status,
     description: order.description,
+    kind: order.kind === "class_plan" ? "class_plan" : "booking",
   };
 }
 
@@ -453,6 +550,63 @@ export async function approveLocalPixCheckout(checkout: PixCheckout): Promise<Pi
   if (new Date(order.expires_at).getTime() <= Date.now()) {
     await expireLocalPixCheckout(checkout);
     throw new Error("Este Pix expirou. Gere uma nova cobrança.");
+  }
+
+  if (order.kind === "class_plan") {
+    const snapshot = order.metadata?.plan_snapshot;
+    if (
+      !snapshot?.plan_id ||
+      !Number.isInteger(snapshot.credit_quantity) ||
+      snapshot.credit_quantity <= 0
+    ) {
+      throw new Error("Os dados deste plano estão incompletos.");
+    }
+    const paidAt = new Date().toISOString();
+    const grantId = uuid();
+    await (supabase as any)
+      .from("payment_attempts")
+      .update({ status: "paid", paid_at: paidAt })
+      .eq("id", checkout.paymentId);
+    await (supabase as any)
+      .from("checkout_orders")
+      .update({ status: "paid", paid_at: paidAt })
+      .eq("id", checkout.orderId);
+    await (supabase as any).from("student_credit_grants").insert({
+      id: grantId,
+      user_id: order.user_id,
+      class_plan_id: snapshot.plan_id,
+      checkout_order_id: order.id,
+      modality: snapshot.credit_modality,
+      credits_granted: snapshot.credit_quantity,
+      amount_paid_cents: order.amount_cents,
+      plan_snapshot: snapshot,
+      status: "active",
+      granted_at: paidAt,
+      refunded_at: null,
+    });
+    await (supabase as any).from("student_credit_ledger").insert({
+      user_id: order.user_id,
+      grant_id: grantId,
+      booking_id: null,
+      checkout_order_id: order.id,
+      entry_type: "purchase_grant",
+      credit_delta: snapshot.credit_quantity,
+      idempotency_key: `plan-purchase:${order.id}`,
+      reason: "Créditos liberados por Pix confirmado.",
+      actor_user_id: null,
+      metadata: { plan_snapshot: snapshot },
+      previous_hash: "local",
+      entry_hash: `local-${uuid()}`,
+      created_at: paidAt,
+    });
+    await (supabase as any).from("notifications").insert({
+      user_id: order.user_id,
+      title: "Créditos liberados",
+      body: `Tudo certo! Seu Pix foi confirmado e ${snapshot.credit_quantity} ${snapshot.credit_quantity === 1 ? "crédito foi liberado" : "créditos foram liberados"}.`,
+      kind: "credits_granted",
+      related_checkout_order_id: order.id,
+    });
+    return { ...checkout, status: "paid" };
   }
 
   const { data: linkedBookings } = await (supabase as any)
