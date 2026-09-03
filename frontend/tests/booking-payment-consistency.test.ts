@@ -28,6 +28,11 @@ const paymentAdmin = fs.readFileSync(
   new URL("../src/lib/payments-admin.functions.ts", import.meta.url),
   "utf8",
 );
+const paymentServer = fs.readFileSync(
+  new URL("../src/lib/payments.functions.ts", import.meta.url),
+  "utf8",
+);
+const paymentClient = fs.readFileSync(new URL("../src/lib/payments.ts", import.meta.url), "utf8");
 const adminBookings = fs.readFileSync(
   new URL("../src/routes/_authenticated/admin.reservas.tsx", import.meta.url),
   "utf8",
@@ -38,6 +43,14 @@ const studentAgenda = fs.readFileSync(
 );
 const studentPlans = fs.readFileSync(
   new URL("../src/routes/_authenticated/app.aulas.tsx", import.meta.url),
+  "utf8",
+);
+const studentDashboard = fs.readFileSync(
+  new URL("../src/routes/_authenticated/app.index.tsx", import.meta.url),
+  "utf8",
+);
+const adminSettings = fs.readFileSync(
+  new URL("../src/routes/_authenticated/admin.configuracoes.tsx", import.meta.url),
   "utf8",
 );
 
@@ -94,6 +107,26 @@ test("open catalogs refresh after administrator changes", () => {
   assert.match(migration, /ADD TABLE public\.class_plans/i);
   assert.match(studentAgenda, /table: "pricing"[\s\S]*loadCatalog/);
   assert.match(studentPlans, /table: "class_plans"/);
+});
+
+test("student booking uses only active class plans and keeps legacy pricing hidden", () => {
+  assert.match(studentAgenda, /from\("class_plans"\)[\s\S]*eq\("active", true\)/);
+  assert.match(studentAgenda, /id="booking-plan"[\s\S]*plans\.map/);
+  assert.match(studentAgenda, /createClassPlanPixCheckout\(\{ planId: activePlan\.id \}\)/);
+  assert.doesNotMatch(studentAgenda, /createBookingPixCheckout/);
+  assert.match(studentAgenda, /\[3, 4\][\s\S]*bookingTypeForPlan\(activePlan, size\)/);
+  assert.match(paymentServer, /ENABLE_DIRECT_BOOKING_PIX !== "true"/);
+  assert.match(paymentClient, /VITE_ENABLE_DIRECT_BOOKING_PIX !== "true"/);
+  assert.match(adminSettings, /SHOW_LEGACY_PRICING_SETTINGS = false/);
+  assert.match(adminSettings, /SHOW_LEGACY_PRICING_SETTINGS && \(\s*<section/);
+});
+
+test("student views expose shared occupancy without participant identities", () => {
+  assert.match(studentAgenda, /session\.occupied_seats\}\/\{session\.capacity\} ocupadas/);
+  assert.match(studentAgenda, /session\.available_seats[\s\S]*restante/);
+  assert.match(studentDashboard, /reservation_session_availability/);
+  assert.match(studentDashboard, /b\.occupied_seats\}\/\{b\.session_capacity\} ocupadas/);
+  assert.match(studentDashboard, /table: "reservation_sessions"[\s\S]*refresh/);
 });
 
 test("plan creation and later changes are audited", () => {

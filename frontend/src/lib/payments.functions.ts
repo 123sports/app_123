@@ -198,6 +198,9 @@ export const createBookingPixCheckoutServer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => createSchema.parse(data))
   .handler(async ({ data, context }) => {
+    if (process.env.ENABLE_DIRECT_BOOKING_PIX !== "true") {
+      throw new Error("Escolha um plano de aulas antes de reservar um horário.");
+    }
     if (data.bookingType === "teste" && process.env.ENABLE_TEST_BOOKING_TYPE !== "true") {
       throw new Error("O tipo de reserva de teste nao esta habilitado neste ambiente.");
     }

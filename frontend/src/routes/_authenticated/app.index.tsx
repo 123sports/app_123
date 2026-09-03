@@ -11,10 +11,14 @@ export const Route = createFileRoute("/_authenticated/app/")({
 
 type Booking = {
   id: string;
+  session_id: string | null;
   booking_date: string;
   start_hour: number;
   type: string;
   status: string;
+  session_capacity: number;
+  occupied_seats: number;
+  available_seats: number;
 };
 
 function Dashboard() {
@@ -41,7 +45,7 @@ function Dashboard() {
     const today = new Date().toISOString().slice(0, 10);
     const { data: ups } = await supabase
       .from("bookings")
-      .select("id, booking_date, start_hour, type, status")
+      .select("id, session_id, booking_date, start_hour, type, status")
       .eq("user_id", u.user.id)
       .eq("status", "confirmada")
       .eq("payment_status", "pago")
@@ -49,7 +53,31 @@ function Dashboard() {
       .order("booking_date")
       .order("start_hour")
       .limit(5);
-    setUpcoming(ups ?? []);
+    const sessionIds = (ups ?? [])
+      .map((booking) => booking.session_id)
+      .filter((sessionId): sessionId is string => Boolean(sessionId));
+    const { data: availabilityRows } = sessionIds.length
+      ? await supabase
+          .from("reservation_session_availability")
+          .select("session_id, capacity, occupied_seats, available_seats")
+          .in("session_id", sessionIds)
+      : { data: [] };
+    const availabilityBySession = new Map(
+      (availabilityRows ?? []).map((session) => [session.session_id, session]),
+    );
+    setUpcoming(
+      (ups ?? []).map((booking) => {
+        const availability = booking.session_id
+          ? availabilityBySession.get(booking.session_id)
+          : null;
+        return {
+          ...booking,
+          session_capacity: availability?.capacity ?? 1,
+          occupied_seats: availability?.occupied_seats ?? 1,
+          available_seats: availability?.available_seats ?? 0,
+        };
+      }),
+    );
     const monthStart = startOfMonth(new Date());
     const nextMonth = startOfMonth(addMonths(monthStart, 1));
     const { count: total } = await supabase
@@ -74,6 +102,11 @@ function Dashboard() {
     const channel = supabase
       .channel("student-dashboard-bookings")
       .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, refresh)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "reservation_sessions" },
+        refresh,
+      )
       .subscribe();
     window.addEventListener("on-tennis-local-data-change", refresh);
     return () => {
@@ -165,6 +198,12 @@ function Dashboard() {
                   <div className="font-semibold type-data">
                     {String(b.start_hour).padStart(2, "0")}:00 · {labelType(b.type)}
                   </div>
+                  {b.session_capacity > 1 && (
+                    <div className="mt-1 text-xs font-medium text-primary">
+                      Sua vaga · {b.occupied_seats}/{b.session_capacity} ocupadas ·{" "}
+                      {b.available_seats} {b.available_seats === 1 ? "restante" : "restantes"}
+                    </div>
+                  )}
                 </div>
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-semibold ${

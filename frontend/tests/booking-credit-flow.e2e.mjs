@@ -55,48 +55,73 @@ try {
   );
 
   await page.goto(`${baseUrl}/admin/configuracoes`, { waitUntil: "networkidle" });
-  const trioPrice = page.getByLabel("Valor de Aula em trio");
-  await trioPrice.fill("66,00");
-  await page.getByTitle("Salvar Aula em trio").click();
-  await page.getByText("Aula em trio atualizado", { exact: true }).waitFor();
+  assert.equal(
+    await page.getByText("Produtos e valores", { exact: true }).count(),
+    0,
+    "Legacy per-booking prices are still visible in settings.",
+  );
 
   await page.evaluate(() => localStorage.setItem("session_audience", "aluno"));
   await page.goto(`${baseUrl}/app/agenda`, { waitUntil: "networkidle" });
-  await page.getByLabel("Tipo de aula").selectOption("aula_trio");
-  await page.getByText(/R\$\s*66,00 por aluno/).waitFor();
+  const planSelect = page.getByLabel("Plano de aula");
+  await planSelect.selectOption("10000000-0000-4000-8000-000000000001");
+  await page.getByRole("button", { name: "3 pessoas" }).waitFor();
+  await page.getByRole("button", { name: "4 pessoas" }).waitFor();
+  await page.getByRole("button", { name: "3 pessoas" }).click();
+  assert.equal(
+    await page.getByRole("button", { name: "3 pessoas" }).getAttribute("aria-pressed"),
+    "true",
+  );
 
-  await page.goto(`${baseUrl}/app/aulas`, { waitUntil: "networkidle" });
-  const planCard = page.getByText("Individual avulsa", { exact: true }).locator("../..");
-  await planCard.getByRole("button", { name: "Comprar com Pix" }).click();
-  await page.getByRole("heading", { name: "Pagar com Pix" }).waitFor();
+  const groupBookingDate = page.getByLabel(localFullDateFromNow(4), { exact: true });
+  if ((await groupBookingDate.count()) === 0) {
+    await page.getByLabel(/Pr.ximo m.s/).click();
+  }
+  await groupBookingDate.click();
+  await page.getByRole("button", { name: /11:00 Livre/ }).click();
+  await page.getByText(/1 de 3 vagas ocupadas e 2 vagas restantes/).waitFor();
+  await page.getByRole("button", { name: "Comprar plano com Pix" }).click();
   await page.getByRole("button", { name: "Simular pagamento aprovado" }).click();
-  await page.getByText("Pagamento aprovado e créditos liberados", { exact: true }).waitFor();
+  await page
+    .getByText(/Pagamento aprovado e cr.ditos liberados/, { exact: true })
+    .last()
+    .waitFor();
   await page.getByRole("button", { name: "Concluir", exact: true }).click();
-  await page.getByText("1", { exact: true }).first().waitFor();
+  await page.getByRole("button", { name: /Reservar com 1 cr.dito/ }).click();
+  await page.getByText(/Aula confirmada com cr.dito/, { exact: true }).waitFor();
+  await page.getByRole("button", { name: /11:00 Sua vaga 1\/3 · 2 restantes/ }).waitFor();
+  await page.getByText(/Sua vaga · 1\/3 ocupadas · 2 restantes/).waitFor();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Cancelar aula" }).click();
+  await page.getByText(/Aula cancelada e cr.dito devolvido/, { exact: true }).waitFor();
 
-  await page.goto(`${baseUrl}/app/agenda`, { waitUntil: "networkidle" });
+  await planSelect.selectOption("20000000-0000-4000-8000-000000000001");
+  await page.getByRole("button", { name: "1 pessoa" }).waitFor();
   const safeBookingDate = page.getByLabel(localFullDateFromNow(3), { exact: true });
   if ((await safeBookingDate.count()) === 0) {
     await page.getByLabel(/Pr.ximo m.s/).click();
   }
   await safeBookingDate.click();
-  await page.getByLabel("Tipo de aula").selectOption("aula_individual");
   await page.getByRole("button", { name: /10:00 Livre/ }).click();
+  await page.getByRole("button", { name: "Comprar plano com Pix" }).click();
+  await page.getByRole("heading", { name: "Pagar com Pix" }).waitFor();
+  await page.getByRole("button", { name: "Simular pagamento aprovado" }).click();
+  await page
+    .getByText("Pagamento aprovado e créditos liberados", { exact: true })
+    .last()
+    .waitFor();
+  await page.getByRole("button", { name: "Concluir", exact: true }).click();
   await page.getByRole("button", { name: "Reservar com 1 crédito" }).click();
   await page.getByText("Aula confirmada com crédito", { exact: true }).waitFor();
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Cancelar aula" }).click();
   await page.getByText("Aula cancelada e crédito devolvido", { exact: true }).waitFor();
 
-  await page.evaluate(() => localStorage.setItem("session_audience", "equipe"));
-  await page.goto(`${baseUrl}/admin/configuracoes`, { waitUntil: "networkidle" });
-  await page.getByLabel("Valor de Aula em trio").fill("65,00");
-  await page.getByTitle("Salvar Aula em trio").click();
-  await page.getByText("Aula em trio atualizado", { exact: true }).waitFor();
-
   assert.deepEqual(pageErrors, [], `Browser errors: ${pageErrors.join(" | ")}`);
   console.log("PASS: future attendance and completion actions are blocked.");
-  console.log("PASS: an admin price change reaches the student booking catalog.");
+  console.log("PASS: legacy per-booking prices are hidden from the administrator.");
+  console.log("PASS: the student sees only plans and the supported class capacities.");
+  console.log("PASS: a three-seat class shows one occupied seat and two remaining seats.");
   console.log("PASS: plan Pix creates credit, booking consumes it and cancellation returns it.");
 } finally {
   await browser.close();

@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  QrCode,
   Users,
   WalletCards,
 } from "lucide-react";
@@ -39,7 +40,7 @@ import {
 import { brl } from "@/lib/money";
 import {
   cancelLocalPixCheckout,
-  createBookingPixCheckout,
+  createClassPlanPixCheckout,
   getPixCheckout,
   type PixCheckout,
 } from "@/lib/payments";
@@ -58,6 +59,30 @@ type Product = {
   requires_professor: boolean;
   sort_order: number;
 };
+
+type ClassPlan = {
+  id: string;
+  title: string;
+  description: string | null;
+  duration_months: number;
+  frequency_per_week: number;
+  class_duration_min: number;
+  price_cents: number;
+  credit_modality: CreditModality;
+  credit_quantity: number;
+};
+
+const PLAN_MODALITY_LABELS: Record<CreditModality, string> = {
+  individual: "Individual",
+  dupla: "Dupla",
+  grupo: "Grupo (3 ou 4 alunos)",
+};
+
+function bookingTypeForPlan(plan: ClassPlan, groupSize: 3 | 4 = 4): BookingType {
+  if (plan.credit_modality === "individual") return "aula_individual";
+  if (plan.credit_modality === "dupla") return "aula_dupla";
+  return groupSize === 3 ? "aula_trio" : "aula_quarteto";
+}
 
 type SessionAvailability = {
   session_id: string;
@@ -102,11 +127,14 @@ function Agenda() {
   const [sessions, setSessions] = useState<SessionAvailability[]>([]);
   const [blocks, setBlocks] = useState<BlockedSlot[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [plans, setPlans] = useState<ClassPlan[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState("");
   const [professors, setProfessors] = useState<{ id: string; full_name: string | null }[]>([]);
   const [type, setType] = useState<BookingType>("quadra_livre");
   const [professorId, setProfessorId] = useState("");
   const [pendingHours, setPendingHours] = useState<Set<number>>(new Set());
   const [checkout, setCheckout] = useState<PixCheckout | null>(null);
+  const [buyingPlan, setBuyingPlan] = useState(false);
   const [rescheduling, setRescheduling] = useState<ReschedulingBooking | null>(null);
   const [loading, setLoading] = useState(false);
   const [creditBalances, setCreditBalances] = useState<Record<CreditModality, number>>({
@@ -124,7 +152,10 @@ function Agenda() {
     [products],
   );
   const activeProduct = productByType.get(type) ?? null;
-  const activeCreditModality = creditModalityForBookingType(type);
+  const activePlan = plans.find((plan) => plan.id === selectedPlanId) ?? null;
+  const activeCreditModality = rescheduling
+    ? creditModalityForBookingType(type)
+    : (activePlan?.credit_modality ?? null);
   const availableCredits = activeCreditModality ? creditBalances[activeCreditModality] : 0;
 
   const monthDays = useMemo(() => {
@@ -136,20 +167,30 @@ function Agenda() {
   }, [cursor]);
 
   const loadCatalog = useCallback(async () => {
-    const [{ data: productRows, error: productError }, { data: professorRows }] = await Promise.all(
-      [
-        supabase
-          .from("pricing")
-          .select(
-            "booking_type, display_name, price_cents, student_capacity, requires_professor, sort_order",
-          )
-          .eq("active", true)
-          .order("sort_order"),
-        (supabase as any).rpc("list_active_professors"),
-      ],
-    );
-    if (productError) {
-      toast.error("Não foi possível carregar os tipos de aula.");
+    const [
+      { data: productRows, error: productError },
+      { data: planRows, error: planError },
+      { data: professorRows },
+    ] = await Promise.all([
+      supabase
+        .from("pricing")
+        .select(
+          "booking_type, display_name, price_cents, student_capacity, requires_professor, sort_order",
+        )
+        .eq("active", true)
+        .order("sort_order"),
+      (supabase as any)
+        .from("class_plans")
+        .select(
+          "id, title, description, duration_months, frequency_per_week, class_duration_min, price_cents, credit_modality, credit_quantity",
+        )
+        .eq("active", true)
+        .order("credit_modality")
+        .order("duration_months"),
+      (supabase as any).rpc("list_active_professors"),
+    ]);
+    if (productError || planError) {
+      toast.error("Não foi possível carregar os planos de aula.");
       return;
     }
     const visibleProducts = ((productRows ?? []) as Product[]).filter(
@@ -157,12 +198,12 @@ function Agenda() {
         product.booking_type !== "teste" ||
         import.meta.env.VITE_ENABLE_TEST_BOOKING_TYPE === "true",
     );
+    const visiblePlans = (planRows ?? []) as ClassPlan[];
     setProducts(visibleProducts);
+    setPlans(visiblePlans);
     setProfessors(professorRows ?? []);
-    setType((current) =>
-      visibleProducts.some((product) => product.booking_type === current)
-        ? current
-        : (visibleProducts[0]?.booking_type ?? current),
+    setSelectedPlanId((current) =>
+      visiblePlans.some((plan) => plan.id === current) ? current : (visiblePlans[0]?.id ?? ""),
     );
   }, []);
 
@@ -172,6 +213,7 @@ function Agenda() {
     const channel = supabase
       .channel("student-booking-catalog")
       .on("postgres_changes", { event: "*", schema: "public", table: "pricing" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "class_plans" }, refresh)
       .subscribe();
     window.addEventListener("on-tennis-local-data-change", refresh);
     return () => {
@@ -179,6 +221,14 @@ function Agenda() {
       void supabase.removeChannel(channel);
     };
   }, [loadCatalog]);
+
+  useEffect(() => {
+    if (!activePlan || rescheduling) return;
+    const currentModality = creditModalityForBookingType(type);
+    if (currentModality === activePlan.credit_modality) return;
+    setType(bookingTypeForPlan(activePlan));
+    setPendingHours(new Set());
+  }, [activePlan, rescheduling, type]);
 
   const loadCredits = useCallback(async () => {
     const { data: auth } = await supabase.auth.getUser();
@@ -285,6 +335,18 @@ function Agenda() {
 
   const daySessions = sessions.filter((session) => session.booking_date === selectedDate);
   const sessionsByHour = new Map(daySessions.map((session) => [session.start_hour, session]));
+  const selectedHour = [...pendingHours][0];
+  const selectedSession = selectedHour == null ? null : (sessionsByHour.get(selectedHour) ?? null);
+  const selectedCapacity = selectedSession?.capacity ?? activeProduct?.student_capacity ?? 0;
+  const selectedOccupiedAfterBooking = selectedSession
+    ? Math.min(selectedSession.occupied_seats + 1, selectedSession.capacity)
+    : selectedCapacity > 0
+      ? 1
+      : 0;
+  const selectedAvailableAfterBooking = Math.max(
+    selectedCapacity - selectedOccupiedAfterBooking,
+    0,
+  );
   const effectiveProfessorId = rescheduling?.professor_id ?? (professorId || null);
   const blockedByHour = new Map(
     blocks
@@ -315,12 +377,25 @@ function Agenda() {
   const nextMonthDisabled = isAfter(startOfMonth(addMonths(cursor, 1)), maxDate);
 
   const canUseSession = (session: SessionAvailability) => {
-    if (session.product_type !== type || session.is_full || session.my_booking_id) return false;
+    const compatibleType = rescheduling
+      ? session.product_type === type
+      : Boolean(
+          activePlan &&
+          creditModalityForBookingType(session.product_type) === activePlan.credit_modality,
+        );
+    if (!compatibleType || session.is_full || session.my_booking_id) return false;
     return !rescheduling || session.professor_id === rescheduling.professor_id;
   };
 
   const canCreateSessionAt = (hour: number) => {
-    if (!activeProduct || blockedByHour.has(hour) || sessionsByHour.has(hour)) return false;
+    if (
+      !activePlan ||
+      !activeProduct ||
+      creditModalityForBookingType(activeProduct.booking_type) !== activePlan.credit_modality ||
+      blockedByHour.has(hour) ||
+      sessionsByHour.has(hour)
+    )
+      return false;
     if (activeProduct.requires_professor && !effectiveProfessorId) return false;
     return isBookingScheduleAllowed(selectedDate, hour);
   };
@@ -340,6 +415,9 @@ function Agenda() {
       type: session.product_type,
     });
     setType(session.product_type);
+    const modality = creditModalityForBookingType(session.product_type);
+    const compatiblePlan = plans.find((plan) => plan.credit_modality === modality);
+    if (compatiblePlan) setSelectedPlanId(compatiblePlan.id);
     setProfessorId(session.professor_id ?? "");
     setPendingHours(new Set());
   };
@@ -383,7 +461,10 @@ function Agenda() {
     if (session && !canUseSession(session)) return;
     if (!session && !canCreateSessionAt(hour)) return;
     playPop();
-    if (session?.professor_id) setProfessorId(session.professor_id);
+    if (session) {
+      setType(session.product_type);
+      if (session.professor_id) setProfessorId(session.professor_id);
+    }
     const singleSelection = Boolean(rescheduling || activeProduct?.requires_professor || session);
     setPendingHours((current) => {
       if (current.has(hour)) return new Set();
@@ -419,31 +500,16 @@ function Agenda() {
     }
   };
 
-  const confirmBooking = async () => {
-    if (!activeProduct || pendingHours.size === 0) return;
-    const selectedSession = sessionsByHour.get([...pendingHours][0]);
-    const checkoutProfessor = selectedSession?.professor_id ?? effectiveProfessorId;
-    if (activeProduct.requires_professor && !checkoutProfessor) {
-      toast.error("Selecione o professor antes de continuar.");
-      return;
-    }
+  const buySelectedPlan = async () => {
+    if (!activePlan) return;
     playPop();
-    setLoading(true);
+    setBuyingPlan(true);
     try {
-      const created = await createBookingPixCheckout({
-        bookingDate: selectedDate,
-        hours: [...pendingHours],
-        bookingType: type,
-        professorId: checkoutProfessor,
-      });
-      setPendingHours(new Set());
-      await loadMonth();
-      setCheckout(created);
+      setCheckout(await createClassPlanPixCheckout({ planId: activePlan.id }));
     } catch (error: any) {
-      toast.error(error?.message ?? "Não foi possível gerar o pagamento.");
-      await loadMonth();
+      toast.error(error?.message ?? "Não foi possível gerar o Pix deste plano.");
     } finally {
-      setLoading(false);
+      setBuyingPlan(false);
     }
   };
 
@@ -507,17 +573,12 @@ function Agenda() {
     }
   };
 
-  const selectedTotal = [...pendingHours].reduce((total, hour) => {
-    const session = sessionsByHour.get(hour);
-    return total + (session?.unit_price_cents ?? activeProduct?.price_cents ?? 0);
-  }, 0);
-
   return (
     <div className="stack-app animate-float-in">
       <PageHeader
         eyebrow="Agenda"
         title="Agenda da quadra"
-        subtitle="Escolha uma aula e reserve com crédito ou Pix"
+        subtitle="Escolha seu plano, a data e o horário da aula"
       />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
@@ -619,30 +680,90 @@ function Agenda() {
           <div>
             <label
               className="mb-1 block text-xs font-medium text-muted-foreground"
-              htmlFor="booking-product"
+              htmlFor="booking-plan"
             >
-              Tipo de aula
+              Plano de aula
             </label>
-            <select
-              id="booking-product"
-              value={type}
-              onChange={(event) => setType(event.target.value as BookingType)}
-              disabled={Boolean(rescheduling)}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
-            >
-              {products.map((product) => (
-                <option key={product.booking_type} value={product.booking_type}>
-                  {product.display_name} · {brl(product.price_cents)}
-                </option>
-              ))}
-            </select>
-            {activeProduct && (
+            {rescheduling ? (
+              <div className="w-full rounded-xl border border-input bg-muted px-3 py-2 text-sm">
+                {activeProduct?.display_name ?? "Reserva atual"}
+              </div>
+            ) : (
+              <select
+                id="booking-plan"
+                value={selectedPlanId}
+                onChange={(event) => {
+                  const plan = plans.find((item) => item.id === event.target.value);
+                  setSelectedPlanId(event.target.value);
+                  if (plan) setType(bookingTypeForPlan(plan));
+                  setPendingHours(new Set());
+                }}
+                className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+              >
+                {plans.length === 0 && <option value="">Nenhum plano disponível</option>}
+                {plans.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {plan.title} · {brl(plan.price_cents)}
+                  </option>
+                ))}
+              </select>
+            )}
+            {activePlan && !rescheduling && (
               <p className="mt-1 text-xs text-muted-foreground">
-                {brl(activeProduct.price_cents)} por aluno · até {activeProduct.student_capacity}{" "}
-                {activeProduct.student_capacity === 1 ? "aluno" : "alunos"} no horário.
+                {PLAN_MODALITY_LABELS[activePlan.credit_modality]} · {activePlan.credit_quantity}{" "}
+                {activePlan.credit_quantity === 1 ? "crédito" : "créditos"} ·{" "}
+                {activePlan.class_duration_min} minutos por aula.
               </p>
             )}
           </div>
+
+          {activePlan && !rescheduling && (
+            <div>
+              <div className="mb-2 text-xs font-medium text-muted-foreground">
+                Pessoas por horário
+              </div>
+              <div className="inline-flex overflow-hidden rounded-xl border border-input bg-background">
+                {(activePlan.credit_modality === "individual"
+                  ? ([1] as const)
+                  : activePlan.credit_modality === "dupla"
+                    ? ([2] as const)
+                    : ([3, 4] as const)
+                ).map((size) => {
+                  const bookingType = bookingTypeForPlan(activePlan, size === 3 ? 3 : 4);
+                  const productAvailable =
+                    size === 1 || size === 2
+                      ? Boolean(activeProduct)
+                      : productByType.has(bookingType);
+                  const selectedSize = activeProduct?.student_capacity === size;
+                  return (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => {
+                        if (size === 3 || size === 4) {
+                          setType(bookingTypeForPlan(activePlan, size));
+                          setPendingHours(new Set());
+                        }
+                      }}
+                      disabled={!productAvailable}
+                      aria-pressed={selectedSize}
+                      className={`min-w-20 border-l border-input px-3 py-2 text-sm font-semibold first:border-l-0 disabled:cursor-not-allowed disabled:opacity-45 ${
+                        selectedSize ? "bg-primary text-primary-foreground" : "hover:bg-secondary"
+                      }`}
+                    >
+                      {size} {size === 1 ? "pessoa" : "pessoas"}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {activePlan && !activeProduct && (
+            <div className="border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              Esta modalidade está temporariamente indisponível para reservas.
+            </div>
+          )}
 
           {activeProduct?.requires_professor && (
             <div>
@@ -674,16 +795,20 @@ function Agenda() {
 
           <div className="flex items-center justify-between border border-input bg-background px-3 py-2 text-sm">
             <span className="font-medium">
-              {availableCredits > 0
-                ? `${availableCredits} créditos disponíveis`
-                : "Pagamento por Pix"}
+              {rescheduling
+                ? "Pagamento já confirmado"
+                : availableCredits > 0
+                  ? `${availableCredits} créditos disponíveis`
+                  : activePlan
+                    ? `Plano por ${brl(activePlan.price_cents)}`
+                    : "Nenhum plano disponível"}
             </span>
             <span className="text-xs text-muted-foreground">
               {rescheduling
-                ? "já confirmado"
+                ? "sem nova cobrança"
                 : availableCredits > 0
                   ? "use 1 por aula"
-                  : "confirmação automática"}
+                  : "pagamento por Pix"}
             </span>
           </div>
 
@@ -724,16 +849,32 @@ function Agenda() {
                   .map((hour) => `${String(hour).padStart(2, "0")}h`)
                   .join(", ")}
               </div>
+              {!rescheduling && selectedCapacity > 1 && (
+                <div className="flex items-start gap-2 border-t border-primary/20 pt-2 text-xs">
+                  <Users className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <span>
+                    Após reservar, a turma ficará com {selectedOccupiedAfterBooking} de{" "}
+                    {selectedCapacity} vagas ocupadas e {selectedAvailableAfterBooking}{" "}
+                    {selectedAvailableAfterBooking === 1 ? "vaga restante" : "vagas restantes"}.
+                  </span>
+                </div>
+              )}
               <div className="flex items-center justify-between border-y border-primary/20 py-2">
                 <span className="text-sm text-muted-foreground">
                   {rescheduling
-                    ? "Novo pagamento"
+                    ? "Troca de horário"
                     : availableCredits > 0
-                      ? "Reserva avulsa por Pix"
-                      : "Total"}
+                      ? "Crédito utilizado"
+                      : "Plano selecionado"}
                 </span>
                 <strong className="type-data text-lg">
-                  {rescheduling ? "R$ 0,00" : brl(selectedTotal)}
+                  {rescheduling
+                    ? "Sem cobrança"
+                    : availableCredits > 0
+                      ? "1 crédito"
+                      : activePlan
+                        ? brl(activePlan.price_cents)
+                        : "—"}
                 </strong>
               </div>
               {rescheduling ? (
@@ -748,7 +889,7 @@ function Agenda() {
                 </button>
               ) : (
                 <div className="grid gap-2">
-                  {activeCreditModality && availableCredits > 0 && (
+                  {activePlan && activeCreditModality && availableCredits > 0 ? (
                     <button
                       type="button"
                       onClick={() => void confirmCreditBooking()}
@@ -762,16 +903,28 @@ function Agenda() {
                       )}
                       Reservar com 1 crédito
                     </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void buySelectedPlan()}
+                        disabled={buyingPlan || !activePlan}
+                        className="btn-bounce inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                      >
+                        {buyingPlan ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <QrCode className="h-4 w-4" />
+                        )}
+                        Comprar plano com Pix
+                      </button>
+                      <p className="text-center text-xs text-muted-foreground">
+                        O Pix compra o plano, mas não bloqueia este horário. Após a confirmação,
+                        finalize a reserva com um crédito; se a vaga for ocupada, o crédito
+                        continuará disponível para outro horário.
+                      </p>
+                    </>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => void confirmBooking()}
-                    disabled={loading || selectedTotal <= 0}
-                    className={`btn-bounce inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60 ${availableCredits > 0 ? "border border-input bg-background text-foreground" : "bg-primary text-primary-foreground"}`}
-                  >
-                    {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-                    Pagar reserva avulsa com Pix
-                  </button>
                 </div>
               )}
             </div>
@@ -795,6 +948,13 @@ function Agenda() {
                         <span className="block text-xs text-muted-foreground">
                           {session.display_name}
                         </span>
+                        {session.capacity > 1 && (
+                          <span className="block text-xs font-medium text-primary">
+                            Sua vaga · {session.occupied_seats}/{session.capacity} ocupadas ·{" "}
+                            {session.available_seats}{" "}
+                            {session.available_seats === 1 ? "restante" : "restantes"}
+                          </span>
+                        )}
                       </span>
                       {session.my_payment_status === "pendente" && session.my_checkout_order_id ? (
                         <span className="flex items-center gap-3">
@@ -845,7 +1005,7 @@ function Agenda() {
         <PixCheckoutDialog
           checkout={checkout}
           onClose={() => setCheckout(null)}
-          onPaid={() => void loadMonth()}
+          onPaid={() => void Promise.all([loadMonth(), loadCredits()])}
         />
       )}
     </div>
@@ -874,17 +1034,21 @@ function SlotButton({
   const mine = Boolean(session?.my_booking_id);
   const actionable = mine || canJoin || canCreate;
   let detail = "Livre";
+  let occupancyDetail: string | null = null;
   if (blockedReason !== undefined && !session) detail = "Bloqueado";
   if (session?.is_full && !mine) detail = "Lotado";
-  if (session && canJoin)
+  if (session && canJoin) {
     detail = `${session.available_seats} ${session.available_seats === 1 ? "vaga" : "vagas"}`;
+    occupancyDetail = `${session.occupied_seats}/${session.capacity} ocupadas`;
+  }
   if (mine) {
-    detail =
-      session?.my_payment_status === "pendente"
-        ? "Aguardando Pix"
-        : session?.my_payment_method === "credito_plano"
-          ? "Usou crédito"
-          : "Sua vaga";
+    detail = session?.my_payment_status === "pendente" ? "Aguardando Pix" : "Sua vaga";
+    if (session && session.capacity > 1) {
+      occupancyDetail =
+        session.available_seats === 0
+          ? "Turma completa"
+          : `${session.occupied_seats}/${session.capacity} · ${session.available_seats} ${session.available_seats === 1 ? "restante" : "restantes"}`;
+    }
   }
   if (session && !mine && !canJoin && !session.is_full) detail = "Outra aula";
 
@@ -894,7 +1058,7 @@ function SlotButton({
       onClick={onClick}
       disabled={disabled || !actionable}
       title={blockedReason ? `Bloqueado: ${blockedReason}` : session?.display_name}
-      className={`flex min-h-14 flex-col items-center justify-center border px-1.5 py-2 text-xs font-semibold transition ${
+      className={`flex h-[4.5rem] flex-col items-center justify-center border px-1.5 py-2 text-xs font-semibold transition ${
         selected
           ? "border-primary bg-primary text-primary-foreground"
           : mine
@@ -908,6 +1072,11 @@ function SlotButton({
     >
       <span className="type-data">{String(hour).padStart(2, "0")}:00</span>
       <span className="mt-0.5 type-micro font-medium">{detail}</span>
+      {occupancyDetail && (
+        <span className="mt-0.5 max-w-full text-center text-[10px] font-medium leading-tight">
+          {occupancyDetail}
+        </span>
+      )}
     </button>
   );
 }

@@ -98,6 +98,9 @@ async function getBookingProduct(bookingType: string): Promise<BookingProduct> {
 }
 
 export async function createBookingPixCheckout(input: CreateBookingPixInput): Promise<PixCheckout> {
+  if (import.meta.env.VITE_ENABLE_DIRECT_BOOKING_PIX !== "true") {
+    throw new Error("Escolha um plano de aulas antes de reservar um horário.");
+  }
   if (!isLocalSupabaseMode()) {
     return createBookingPixCheckoutServer({ data: input });
   }

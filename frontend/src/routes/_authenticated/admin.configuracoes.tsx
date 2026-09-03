@@ -56,6 +56,7 @@ type Socials = {
 };
 
 const SOCIAL_KEYS: (keyof Socials)[] = ["instagram", "facebook", "youtube", "tiktok", "website"];
+const SHOW_LEGACY_PRICING_SETTINGS = false;
 
 function ConfigPage() {
   const [whatsapp, setWhatsapp] = useState("");
@@ -274,98 +275,100 @@ function ConfigPage() {
         subtitle="Dados públicos exibidos para os alunos e leads na landing page."
       />
 
-      <section className="plane">
-        <div className="mb-4 flex items-start gap-3">
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
-            <CircleDollarSign className="h-4 w-4" />
-          </span>
-          <div>
-            <h2 className="type-h3">Produtos e valores</h2>
-            <p className="type-micro text-muted-foreground">
-              Defina quanto cada aluno paga por uma vaga. Alterações não mudam reservas ou Pix já
-              criados.
-            </p>
+      {SHOW_LEGACY_PRICING_SETTINGS && (
+        <section className="plane">
+          <div className="mb-4 flex items-start gap-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+              <CircleDollarSign className="h-4 w-4" />
+            </span>
+            <div>
+              <h2 className="type-h3">Produtos e valores</h2>
+              <p className="type-micro text-muted-foreground">
+                Defina quanto cada aluno paga por uma vaga. Alterações não mudam reservas ou Pix já
+                criados.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="divide-y divide-border border-y border-border">
-          {products
-            .filter(
-              (product) =>
-                product.booking_type !== "teste" ||
-                import.meta.env.VITE_ENABLE_TEST_BOOKING_TYPE === "true",
-            )
-            .map((product) => (
-              <div
-                key={product.id}
-                className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_150px_auto] sm:items-end"
-              >
-                <div className="min-w-0">
-                  <div className="font-semibold">{product.display_name}</div>
-                  <div className="mt-1 flex items-center gap-1.5 type-micro text-muted-foreground">
-                    <Users className="h-3.5 w-3.5" />
-                    {product.student_capacity === 1
-                      ? "1 aluno por horário"
-                      : `Até ${product.student_capacity} alunos por horário`}
+          <div className="divide-y divide-border border-y border-border">
+            {products
+              .filter(
+                (product) =>
+                  product.booking_type !== "teste" ||
+                  import.meta.env.VITE_ENABLE_TEST_BOOKING_TYPE === "true",
+              )
+              .map((product) => (
+                <div
+                  key={product.id}
+                  className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_150px_auto] sm:items-end"
+                >
+                  <div className="min-w-0">
+                    <div className="font-semibold">{product.display_name}</div>
+                    <div className="mt-1 flex items-center gap-1.5 type-micro text-muted-foreground">
+                      <Users className="h-3.5 w-3.5" />
+                      {product.student_capacity === 1
+                        ? "1 aluno por horário"
+                        : `Até ${product.student_capacity} alunos por horário`}
+                    </div>
+                  </div>
+                  <label className="block">
+                    <span className="mb-1 block type-micro text-muted-foreground">
+                      Valor por aluno
+                    </span>
+                    <span className="flex items-center rounded-lg border border-input bg-background px-3">
+                      <span className="text-sm text-muted-foreground">R$</span>
+                      <input
+                        inputMode="decimal"
+                        value={productDrafts[product.id] ?? ""}
+                        onChange={(event) =>
+                          setProductDrafts((current) => ({
+                            ...current,
+                            [product.id]: event.target.value,
+                          }))
+                        }
+                        className="min-w-0 flex-1 bg-transparent px-2 py-2 text-right text-sm outline-none"
+                        aria-label={`Valor de ${product.display_name}`}
+                      />
+                    </span>
+                  </label>
+                  <div className="flex items-center justify-between gap-3 sm:justify-end">
+                    <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={product.active}
+                        onChange={(event) =>
+                          setProducts((current) =>
+                            current.map((item) =>
+                              item.id === product.id
+                                ? { ...item, active: event.target.checked }
+                                : item,
+                            ),
+                          )
+                        }
+                        className="h-4 w-4 accent-primary"
+                      />
+                      Disponível
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => void saveProduct(product)}
+                      disabled={savingProductId === product.id}
+                      className="btn-bounce inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-60"
+                      title={`Salvar ${product.display_name}`}
+                      aria-label={`Salvar ${product.display_name}`}
+                    >
+                      {savingProductId === product.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4" />
+                      )}
+                    </button>
                   </div>
                 </div>
-                <label className="block">
-                  <span className="mb-1 block type-micro text-muted-foreground">
-                    Valor por aluno
-                  </span>
-                  <span className="flex items-center rounded-lg border border-input bg-background px-3">
-                    <span className="text-sm text-muted-foreground">R$</span>
-                    <input
-                      inputMode="decimal"
-                      value={productDrafts[product.id] ?? ""}
-                      onChange={(event) =>
-                        setProductDrafts((current) => ({
-                          ...current,
-                          [product.id]: event.target.value,
-                        }))
-                      }
-                      className="min-w-0 flex-1 bg-transparent px-2 py-2 text-right text-sm outline-none"
-                      aria-label={`Valor de ${product.display_name}`}
-                    />
-                  </span>
-                </label>
-                <div className="flex items-center justify-between gap-3 sm:justify-end">
-                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={product.active}
-                      onChange={(event) =>
-                        setProducts((current) =>
-                          current.map((item) =>
-                            item.id === product.id
-                              ? { ...item, active: event.target.checked }
-                              : item,
-                          ),
-                        )
-                      }
-                      className="h-4 w-4 accent-primary"
-                    />
-                    Disponível
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => void saveProduct(product)}
-                    disabled={savingProductId === product.id}
-                    className="btn-bounce inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-60"
-                    title={`Salvar ${product.display_name}`}
-                    aria-label={`Salvar ${product.display_name}`}
-                  >
-                    {savingProductId === product.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Save className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-            ))}
-        </div>
-      </section>
+              ))}
+          </div>
+        </section>
+      )}
 
       <section className="plane">
         <div className="mb-4 flex items-start gap-3">
