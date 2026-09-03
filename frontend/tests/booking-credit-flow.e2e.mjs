@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright-core";
 
-const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:5173";
+const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:4173";
 const browser = await chromium.launch({
   executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe",
   headless: true,
@@ -106,10 +106,7 @@ try {
   await page.getByRole("button", { name: "Comprar plano com Pix" }).click();
   await page.getByRole("heading", { name: "Pagar com Pix" }).waitFor();
   await page.getByRole("button", { name: "Simular pagamento aprovado" }).click();
-  await page
-    .getByText("Pagamento aprovado e créditos liberados", { exact: true })
-    .last()
-    .waitFor();
+  await page.getByText("Pagamento aprovado e créditos liberados", { exact: true }).last().waitFor();
   await page.getByRole("button", { name: "Concluir", exact: true }).click();
   await page.getByRole("button", { name: "Reservar com 1 crédito" }).click();
   await page.getByText("Aula confirmada com crédito", { exact: true }).waitFor();

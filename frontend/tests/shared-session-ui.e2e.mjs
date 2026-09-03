@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright-core";
 
-const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:5173";
+const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:4173";
 const browser = await chromium.launch({
   executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe",
   headless: true,

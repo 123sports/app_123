@@ -26,6 +26,7 @@
     "test:e2e:reschedule": "node tests/agenda-reschedule.e2e.mjs",
     "test:e2e:shared-sessions": "node tests/shared-session-ui.e2e.mjs",
     "test:e2e:booking-credit": "node tests/booking-credit-flow.e2e.mjs",
+    "test:e2e:comprehensive": "node tests/comprehensive-booking-flow.e2e.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
