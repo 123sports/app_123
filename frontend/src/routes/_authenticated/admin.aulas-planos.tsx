@@ -64,7 +64,18 @@ function AdminAulasPlanos() {
     setPlans((data as any) ?? []);
   };
   useEffect(() => {
-    load();
+    void load();
+    const channel = supabase
+      .channel("admin-class-plans")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "class_plans" },
+        () => void load(),
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, []);
 
   const deactivate = async (id: string) => {

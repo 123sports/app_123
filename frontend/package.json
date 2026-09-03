@@ -22,8 +22,10 @@
     "test:shared-sessions": "node tests/shared-session-security.mjs",
     "test:shared-sessions:preflight": "node tests/shared-session-migration-preflight.mjs",
     "test:credit-ledger:preflight": "node tests/credit-ledger-migration-preflight.mjs",
+    "test:consistency": "node --test --experimental-strip-types tests/booking-payment-consistency.test.ts",
     "test:e2e:reschedule": "node tests/agenda-reschedule.e2e.mjs",
     "test:e2e:shared-sessions": "node tests/shared-session-ui.e2e.mjs",
+    "test:e2e:booking-credit": "node tests/booking-credit-flow.e2e.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

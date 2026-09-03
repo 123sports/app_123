@@ -151,7 +151,7 @@ async function createLocalCreditBooking(
     credit_grant_id: grant.id,
     hold_expires_at: null,
     confirmed_at: now,
-    attended: false,
+    attended: null,
   });
   await (supabase as any).from("student_credit_allocations").insert({
     id: allocationId,

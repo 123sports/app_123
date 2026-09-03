@@ -83,7 +83,7 @@ const localBookings = [
     payment_method: 'pix',
     amount_cents: 12000,
     confirmed_at: null,
-    attended: false,
+    attended: null,
     hold_expires_at: null,
     checkout_order_id: null,
     created_at: new Date().toISOString(),

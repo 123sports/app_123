@@ -17,7 +17,7 @@ try {
   await page.waitForURL(/\/(?:app|admin)(?:\/|$)/);
 
   await page.goto(`${baseUrl}/app`, { waitUntil: "networkidle" });
-  await page.getByText("Reservas pagas", { exact: true }).waitFor();
+  await page.getByText("Próximas reservas", { exact: true }).waitFor();
   assert.equal(
     await page.getByRole("heading", { name: "Confirme sua presença" }).count(),
     0,
@@ -26,14 +26,14 @@ try {
 
   await page.goto(`${baseUrl}/app/agenda`, { waitUntil: "networkidle" });
   await page.getByLabel("Tipo de aula").selectOption("aula_trio");
-  await page.getByText(/65,00 por aluno · até 3 alunos/).waitFor();
+  await page.getByText(/65,00 por aluno\s*·\s*até 3 alunos/).waitFor();
   const freeSlot = page.getByRole("button", { name: /10:00 Livre/ });
   await freeSlot.click();
   await page.getByText("R$ 65,00", { exact: true }).waitFor();
   await page.waitForTimeout(600);
   await page.screenshot({ path: ".output/shared-session-agenda-mobile.png", fullPage: true });
 
-  await page.getByRole("button", { name: "Ir para pagamento" }).click();
+  await page.getByRole("button", { name: "Pagar reserva avulsa com Pix" }).click();
   await page.getByRole("heading", { name: "Pagar com Pix" }).waitFor();
   await page.getByRole("button", { name: "Fechar", exact: true }).click();
   await page.getByRole("button", { name: "Abrir Pix", exact: true }).click();

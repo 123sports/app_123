@@ -4,6 +4,7 @@ import { ArrowLeft, Phone, AlertTriangle, Cake, Trophy, WalletCards } from "luci
 import { supabase } from "@/integrations/supabase/client";
 import { brl } from "@/lib/money";
 import { effectiveCheckoutStatus } from "@/lib/payment-security";
+import { venueBookingStartMs } from "@/lib/booking-schedule";
 import { format } from "date-fns";
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
@@ -154,8 +155,14 @@ function AlunoDetalhe() {
   }, [id, staffRole]);
 
   const total = bookings.length;
-  const attended = bookings.filter((b) => b.attended === true).length;
-  const missed = bookings.filter((b) => b.attended === false).length;
+  const evaluatedBookings = bookings.filter(
+    (booking) =>
+      booking.payment_status === "pago" &&
+      ["confirmada", "concluida"].includes(booking.status) &&
+      venueBookingStartMs(booking.booking_date, booking.start_hour) <= Date.now(),
+  );
+  const attended = evaluatedBookings.filter((booking) => booking.attended === true).length;
+  const missed = evaluatedBookings.filter((booking) => booking.attended === false).length;
 
   return (
     <div className="space-y-4">
@@ -285,9 +292,10 @@ function AlunoDetalhe() {
                         {b.attended === true && (
                           <span className="ml-1 type-micro text-primary">presente</span>
                         )}
-                        {b.attended === false && (
-                          <span className="ml-1 type-micro text-destructive">faltou</span>
-                        )}
+                        {b.attended === false &&
+                          venueBookingStartMs(b.booking_date, b.start_hour) <= Date.now() && (
+                            <span className="ml-1 type-micro text-destructive">faltou</span>
+                          )}
                       </div>
                     </li>
                   ))}

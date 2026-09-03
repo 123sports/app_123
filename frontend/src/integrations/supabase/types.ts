@@ -1030,6 +1030,7 @@ export type Database = {
           read: boolean
           related_booking_id: string | null
           related_checkout_order_id: string | null
+          related_session_id: string | null
           title: string
           user_id: string
         }
@@ -1041,6 +1042,7 @@ export type Database = {
           read?: boolean
           related_booking_id?: string | null
           related_checkout_order_id?: string | null
+          related_session_id?: string | null
           title: string
           user_id: string
         }
@@ -1052,6 +1054,7 @@ export type Database = {
           read?: boolean
           related_booking_id?: string | null
           related_checkout_order_id?: string | null
+          related_session_id?: string | null
           title?: string
           user_id?: string
         }
@@ -1068,6 +1071,20 @@ export type Database = {
             columns: ["related_checkout_order_id"]
             isOneToOne: false
             referencedRelation: "checkout_orders_admin"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_related_session_id_fkey"
+            columns: ["related_session_id"]
+            isOneToOne: false
+            referencedRelation: "reservation_session_availability"
+            referencedColumns: ["session_id"]
+          },
+          {
+            foreignKeyName: "notifications_related_session_id_fkey"
+            columns: ["related_session_id"]
+            isOneToOne: false
+            referencedRelation: "reservation_sessions"
             referencedColumns: ["id"]
           },
         ]

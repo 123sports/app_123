@@ -135,37 +135,50 @@ function Agenda() {
     };
   }, [cursor]);
 
-  useEffect(() => {
-    void (async () => {
-      const [{ data: productRows, error: productError }, { data: professorRows }] =
-        await Promise.all([
-          supabase
-            .from("pricing")
-            .select(
-              "booking_type, display_name, price_cents, student_capacity, requires_professor, sort_order",
-            )
-            .eq("active", true)
-            .order("sort_order"),
-          (supabase as any).rpc("list_active_professors"),
-        ]);
-      if (productError) {
-        toast.error("Não foi possível carregar os tipos de aula.");
-        return;
-      }
-      const visibleProducts = ((productRows ?? []) as Product[]).filter(
-        (product) =>
-          product.booking_type !== "teste" ||
-          import.meta.env.VITE_ENABLE_TEST_BOOKING_TYPE === "true",
-      );
-      setProducts(visibleProducts);
-      setProfessors(professorRows ?? []);
-      setType((current) =>
-        visibleProducts.some((product) => product.booking_type === current)
-          ? current
-          : (visibleProducts[0]?.booking_type ?? current),
-      );
-    })();
+  const loadCatalog = useCallback(async () => {
+    const [{ data: productRows, error: productError }, { data: professorRows }] = await Promise.all(
+      [
+        supabase
+          .from("pricing")
+          .select(
+            "booking_type, display_name, price_cents, student_capacity, requires_professor, sort_order",
+          )
+          .eq("active", true)
+          .order("sort_order"),
+        (supabase as any).rpc("list_active_professors"),
+      ],
+    );
+    if (productError) {
+      toast.error("Não foi possível carregar os tipos de aula.");
+      return;
+    }
+    const visibleProducts = ((productRows ?? []) as Product[]).filter(
+      (product) =>
+        product.booking_type !== "teste" ||
+        import.meta.env.VITE_ENABLE_TEST_BOOKING_TYPE === "true",
+    );
+    setProducts(visibleProducts);
+    setProfessors(professorRows ?? []);
+    setType((current) =>
+      visibleProducts.some((product) => product.booking_type === current)
+        ? current
+        : (visibleProducts[0]?.booking_type ?? current),
+    );
   }, []);
+
+  useEffect(() => {
+    void loadCatalog();
+    const refresh = () => void loadCatalog();
+    const channel = supabase
+      .channel("student-booking-catalog")
+      .on("postgres_changes", { event: "*", schema: "public", table: "pricing" }, refresh)
+      .subscribe();
+    window.addEventListener("on-tennis-local-data-change", refresh);
+    return () => {
+      window.removeEventListener("on-tennis-local-data-change", refresh);
+      void supabase.removeChannel(channel);
+    };
+  }, [loadCatalog]);
 
   const loadCredits = useCallback(async () => {
     const { data: auth } = await supabase.auth.getUser();
@@ -202,6 +215,7 @@ function Agenda() {
         { event: "INSERT", schema: "public", table: "student_credit_ledger" },
         refresh,
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "site_settings" }, refresh)
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -549,6 +563,7 @@ function Agenda() {
                 <button
                   key={date.toISOString()}
                   type="button"
+                  aria-label={format(date, "dd/MM/yyyy")}
                   disabled={!available}
                   onClick={() => setSelected(date)}
                   className={`relative flex aspect-square flex-col items-center justify-start gap-0.5 rounded-xl p-1 text-sm font-medium transition ${selectedDay ? "bg-primary text-primary-foreground" : available ? "bg-secondary hover:bg-muted" : "bg-muted/40 text-muted-foreground/40"}`}

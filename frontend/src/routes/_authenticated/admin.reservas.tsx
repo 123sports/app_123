@@ -18,6 +18,7 @@ import {
 import { ptBR } from "date-fns/locale";
 import { PageHeader } from "@/components/PageHeader";
 import { ViewTabs } from "@/components/ViewTabs";
+import { venueBookingStartMs } from "@/lib/booking-schedule";
 
 export const Route = createFileRoute("/_authenticated/admin/reservas")({
   component: AdminReservas,
@@ -107,23 +108,39 @@ function occupiesSession(row: Pick<Row, "status" | "payment_status" | "hold_expi
 }
 
 function allowedBookingStatuses(row: Row) {
+  const withoutPrematureCompletion = (statuses: typeof STATUSES) =>
+    statuses.filter((status) => status.key !== "concluida" || canConcludeBooking(row));
   if (row.credit_grant_id) {
     if (row.status === "concluida") {
       return STATUSES.filter((status) => status.key === "concluida");
     }
-    return STATUSES.filter((status) => status.key === "confirmada" || status.key === "concluida");
+    return withoutPrematureCompletion(
+      STATUSES.filter((status) => status.key === "confirmada" || status.key === "concluida"),
+    );
   }
-  if (!row.checkout_order_id) return STATUSES;
+  if (!row.checkout_order_id) return withoutPrematureCompletion(STATUSES);
   if (row.payment_status === "pago" && row.status === "confirmada") {
-    return STATUSES.filter((status) => status.key === "confirmada" || status.key === "concluida");
+    return withoutPrematureCompletion(
+      STATUSES.filter((status) => status.key === "confirmada" || status.key === "concluida"),
+    );
   }
   return STATUSES.filter((status) => status.key === row.status);
 }
 
+function bookingHasStarted(row: Pick<Row, "booking_date" | "start_hour">) {
+  return venueBookingStartMs(row.booking_date, row.start_hour) <= Date.now();
+}
+
 function canRecordAttendance(row: Row) {
   return (
-    row.payment_status === "pago" && (row.status === "confirmada" || row.status === "concluida")
+    bookingHasStarted(row) &&
+    row.payment_status === "pago" &&
+    (row.status === "confirmada" || row.status === "concluida")
   );
+}
+
+function canConcludeBooking(row: Row) {
+  return canRecordAttendance(row) && row.attended !== null;
 }
 
 function PaymentStatus({ status, method }: { status: string; method?: string | null }) {
@@ -227,6 +244,7 @@ function AdminReservas() {
         { event: "*", schema: "public", table: "reservation_sessions" },
         refresh,
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "pricing" }, refresh)
       .subscribe();
     const refreshInterval = window.setInterval(refresh, 30_000);
     window.addEventListener("on-tennis-local-data-change", refresh);
@@ -447,7 +465,13 @@ function ProfessorReservationsView({
                   {booking.status === "confirmada" && (
                     <button
                       onClick={() => update(booking.id, { status: "concluida" })}
-                      className="rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
+                      disabled={!canConcludeBooking(booking)}
+                      className="rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                      title={
+                        bookingHasStarted(booking)
+                          ? "Registre a presença ou a falta antes de concluir"
+                          : "Disponível após o início da aula"
+                      }
                     >
                       Concluir
                     </button>

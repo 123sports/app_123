@@ -206,7 +206,7 @@ export async function createBookingPixCheckout(input: CreateBookingPixInput): Pr
     checkout_order_id: orderId,
     hold_expires_at: expiresAt,
     confirmed_at: null,
-    attended: false,
+    attended: null,
   }));
 
   const order = {

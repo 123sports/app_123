@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Clock3, Loader2, QrCode, ReceiptText } from "lucide-react";
+import { CheckCircle2, Clock3, Loader2, QrCode, ReceiptText, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { brl } from "@/lib/money";
 import { effectiveCheckoutStatus } from "@/lib/payment-security";
+import { reconcileReviewedPaymentServer } from "@/lib/payments-admin.functions";
 import { cleanupExpiredLocalPixCheckouts } from "@/lib/payments";
 import { PageHeader } from "@/components/PageHeader";
 import { addMonths, startOfMonth } from "date-fns";
@@ -34,6 +36,7 @@ function AdminPayments() {
   const [names, setNames] = useState<Record<string, string>>({});
   const [metrics, setMetrics] = useState({ revenueMonth: 0, pending: 0, total: 0 });
   const [loading, setLoading] = useState(true);
+  const [reconcilingId, setReconcilingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<
     | "all"
     | "pending"
@@ -127,6 +130,21 @@ function AdminPayments() {
     () => orders.filter((order) => filter === "all" || effectiveStatus(order) === filter),
     [filter, orders],
   );
+
+  const reconcile = async (orderId: string) => {
+    setReconcilingId(orderId);
+    try {
+      const result = await reconcileReviewedPaymentServer({ data: { orderId } });
+      if (result.resolved) toast.success("Pagamento conferido", { description: result.message });
+      else toast.warning("Pagamento continua em análise", { description: result.message });
+      await load();
+    } catch (error: any) {
+      toast.error(error?.message ?? "Não foi possível conferir o pagamento agora.");
+    } finally {
+      setReconcilingId(null);
+    }
+  };
+
   return (
     <div className="stack-app animate-float-in">
       <PageHeader
@@ -177,6 +195,7 @@ function AdminPayments() {
                   <th className="p-3">Método</th>
                   <th className="p-3">Status</th>
                   <th className="p-3 text-right">Valor</th>
+                  <th className="p-3 text-right">Ação</th>
                 </tr>
               </thead>
               <tbody>
@@ -208,6 +227,26 @@ function AdminPayments() {
                       </td>
                       <td className="p-3 text-right type-data font-semibold">
                         {brl(order.amount_cents)}
+                      </td>
+                      <td className="p-3 text-right">
+                        {order.status === "paid_needs_review" ? (
+                          <button
+                            type="button"
+                            onClick={() => void reconcile(order.id)}
+                            disabled={reconcilingId !== null}
+                            className="btn-bounce inline-flex items-center gap-2 whitespace-nowrap border border-input bg-background px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                            title="Consultar o Mercado Pago e tentar confirmar com segurança"
+                          >
+                            {reconcilingId === order.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-3.5 w-3.5" />
+                            )}
+                            Conferir Pix
+                          </button>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                     </tr>
                   );

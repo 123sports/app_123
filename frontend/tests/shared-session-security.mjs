@@ -250,16 +250,23 @@ try {
 
   const { data: paidBooking, error: paidBookingError } = await admin
     .from("bookings")
-    .select("status, payment_status, session_id")
+    .select("status, payment_status, session_id, attended")
     .eq("id", first.data.booking_ids[0])
     .single();
   if (paidBookingError) throw paidBookingError;
   assert(
     paidBooking.status === "confirmada" &&
       paidBooking.payment_status === "pago" &&
-      paidBooking.session_id === sessionId,
+      paidBooking.session_id === sessionId &&
+      paidBooking.attended === null,
     "A paid group seat was not confirmed in its session.",
   );
+
+  const { error: prematureAttendanceError } = await adminUser.client
+    .from("bookings")
+    .update({ attended: true })
+    .eq("id", first.data.booking_ids[0]);
+  assert(prematureAttendanceError, "An admin recorded attendance before the lesson started.");
 
   const [studentNotificationResult, adminNotificationResult] = await Promise.all([
     admin
@@ -406,18 +413,93 @@ try {
     "A released seat did not return to the same session.",
   );
 
-  const concurrentSlot = groupSlot.hours[1];
+  const reviewSlot = await findFreeSlots(1);
+  const reviewed = await createHold(
+    students[3].id,
+    reviewSlot.date,
+    reviewSlot.hours[0],
+    "aula_individual",
+    professor.id,
+  );
+  if (reviewed.error) throw reviewed.error;
+  const { error: expireBookingError } = await admin
+    .from("bookings")
+    .update({ status: "cancelada", payment_status: "expirado", hold_expires_at: null })
+    .eq("id", reviewed.data.booking_ids[0]);
+  if (expireBookingError) throw expireBookingError;
+  const { error: expireOrderError } = await admin
+    .from("checkout_orders")
+    .update({ status: "expired" })
+    .eq("id", reviewed.data.order_id);
+  if (expireOrderError) throw expireOrderError;
+  const reviewedPaymentId = `REVIEW-${crypto.randomUUID()}`;
+  const { error: reviewedAttemptError } = await admin.from("payment_attempts").insert({
+    checkout_order_id: reviewed.data.order_id,
+    provider: "mercado_pago",
+    provider_payment_id: reviewedPaymentId,
+    payment_method: "pix",
+    status: "paid",
+    amount_cents: reviewed.data.amount_cents,
+  });
+  if (reviewedAttemptError) throw reviewedAttemptError;
+  const { error: reviewOrderError } = await admin
+    .from("checkout_orders")
+    .update({ status: "paid_needs_review" })
+    .eq("id", reviewed.data.order_id);
+  if (reviewOrderError) throw reviewOrderError;
+
+  const { error: unauthorizedRestoreError } = await students[3].client.rpc(
+    "restore_review_booking_checkout",
+    { p_order_id: reviewed.data.order_id, p_paid_at: new Date().toISOString() },
+  );
+  assert(unauthorizedRestoreError, "A student can restore a payment review directly.");
+
+  const { error: restoreError } = await admin.rpc("restore_review_booking_checkout", {
+    p_order_id: reviewed.data.order_id,
+    p_paid_at: new Date().toISOString(),
+  });
+  if (restoreError) throw restoreError;
+  const [{ data: restoredOrder }, { data: restoredBooking }] = await Promise.all([
+    admin.from("checkout_orders").select("status").eq("id", reviewed.data.order_id).single(),
+    admin
+      .from("bookings")
+      .select("status, payment_status, attended")
+      .eq("id", reviewed.data.booking_ids[0])
+      .single(),
+  ]);
+  assert(
+    restoredOrder.status === "paid" &&
+      restoredBooking.status === "confirmada" &&
+      restoredBooking.payment_status === "pago" &&
+      restoredBooking.attended === null,
+    "A verified late Pix was not restored atomically.",
+  );
+
+  const concurrentGroupSlot = await findFreeSlots(1);
+  const concurrentSlot = concurrentGroupSlot.hours[0];
   const initialDouble = await createHold(
     students[0].id,
-    groupSlot.date,
+    concurrentGroupSlot.date,
     concurrentSlot,
     "aula_dupla",
     professor.id,
   );
   if (initialDouble.error) throw initialDouble.error;
   const concurrent = await Promise.all([
-    createHold(students[1].id, groupSlot.date, concurrentSlot, "aula_dupla", professor.id),
-    createHold(students[2].id, groupSlot.date, concurrentSlot, "aula_dupla", professor.id),
+    createHold(
+      students[1].id,
+      concurrentGroupSlot.date,
+      concurrentSlot,
+      "aula_dupla",
+      professor.id,
+    ),
+    createHold(
+      students[2].id,
+      concurrentGroupSlot.date,
+      concurrentSlot,
+      "aula_dupla",
+      professor.id,
+    ),
   ]);
   assert(
     concurrent.filter((result) => !result.error).length === 1,
@@ -430,6 +512,7 @@ try {
   console.log("PASS: fixed product definitions and payment history resist browser changes.");
   console.log("PASS: participant identities remain isolated by RLS.");
   console.log("PASS: cancellation releases one seat and concurrent checkout cannot oversell.");
+  console.log("PASS: future attendance is blocked and a verified late Pix is restored atomically.");
 } finally {
   for (const orderId of [...new Set(createdOrderIds)].reverse()) {
     const { data: order } = await admin

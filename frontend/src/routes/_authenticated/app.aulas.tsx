@@ -141,6 +141,7 @@ function MinhasAulas() {
         },
         refresh,
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "class_plans" }, refresh)
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
