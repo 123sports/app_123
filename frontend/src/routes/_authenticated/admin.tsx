@@ -1,23 +1,25 @@
 import { createFileRoute, Link, Outlet, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
-  LayoutDashboard, CalendarClock, Users, ArrowLeft, Settings, Lock, GraduationCap, QrCode,
+  LayoutDashboard,
+  CalendarClock,
+  Users,
+  ArrowLeft,
+  Settings,
+  Lock,
+  GraduationCap,
+  QrCode,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { SidebarShell, type SideNavGroup } from "@/components/SidebarShell";
 import { playPop } from "@/lib/sfx";
 import { Toaster } from "@/components/ui/sonner";
-import { getAudience, clearAudience } from "@/lib/session-audience";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   beforeLoad: async ({ location }) => {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) throw redirect({ to: "/auth" });
-    const audience = getAudience();
-    if (audience !== "equipe") {
-      throw redirect({ to: "/app" });
-    }
     const { data: roles } = await supabase
       .from("user_roles")
       .select("role")
@@ -26,10 +28,10 @@ export const Route = createFileRoute("/_authenticated/admin")({
     const isProfessor = (roles ?? []).some((r) => r.role === "professor");
     if (!isAdmin && !isProfessor) throw redirect({ to: "/app" });
 
-    const staffRole = isAdmin ? "admin" as const : "professor" as const;
+    const staffRole = isAdmin ? ("admin" as const) : ("professor" as const);
     if (
-      staffRole === "professor"
-      && !PROFESSOR_PATHS.some((path) =>
+      staffRole === "professor" &&
+      !PROFESSOR_PATHS.some((path) =>
         path === "/admin"
           ? location.pathname === path || location.pathname === `${path}/`
           : location.pathname === path || location.pathname.startsWith(`${path}/`),
@@ -64,27 +66,19 @@ const ADMIN_NAV: SideNavGroup[] = [
   },
   {
     label: "Aulas",
-    items: [
-      { to: "/admin/aulas-planos", label: "Planos de Aulas", icon: GraduationCap },
-    ],
+    items: [{ to: "/admin/aulas-planos", label: "Planos de Aulas", icon: GraduationCap }],
   },
   {
     label: "Pessoas",
-    items: [
-      { to: "/admin/alunos", label: "Alunos", icon: Users },
-    ],
+    items: [{ to: "/admin/alunos", label: "Alunos", icon: Users }],
   },
   {
     label: "Negócio",
-    items: [
-      { to: "/admin/pagamentos", label: "Pagamentos", icon: QrCode },
-    ],
+    items: [{ to: "/admin/pagamentos", label: "Pagamentos", icon: QrCode }],
   },
   {
     label: "Sistema",
-    items: [
-      { to: "/admin/configuracoes", label: "Configurações", icon: Settings },
-    ],
+    items: [{ to: "/admin/configuracoes", label: "Configurações", icon: Settings }],
   },
 ];
 
@@ -99,9 +93,7 @@ const PROFESSOR_NAV: SideNavGroup[] = [
   },
   {
     label: "Alunos",
-    items: [
-      { to: "/admin/alunos", label: "Meus alunos", icon: Users },
-    ],
+    items: [{ to: "/admin/alunos", label: "Meus alunos", icon: Users }],
   },
 ];
 
@@ -114,14 +106,17 @@ function AdminShell() {
     (async () => {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) return;
-      const { data } = await supabase.from("profiles").select("full_name").eq("id", u.user.id).maybeSingle();
+      const { data } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", u.user.id)
+        .maybeSingle();
       setName(data?.full_name ?? u.user.email ?? "");
     })();
   }, []);
 
   const handleLogout = async () => {
     playPop();
-    clearAudience();
     await supabase.auth.signOut();
     navigate({ to: "/" });
   };

@@ -22,6 +22,8 @@ services:
         value: "false"
       - key: VITE_ENABLE_GOOGLE_AUTH
         value: "false"
+      - key: VITE_TURNSTILE_SITE_KEY
+        sync: false
       - key: VITE_PAYMENT_PROVIDER
         value: mercado_pago
       - key: APP_BASE_URL

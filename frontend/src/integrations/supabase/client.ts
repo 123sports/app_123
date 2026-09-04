@@ -26,6 +26,7 @@ const localSession = {
 };
 
 const LOCAL_SESSION_KEY = 'on_tennis_local_supabase_session';
+const LOCAL_SIGNUP_STUDENT_KEY = 'on_tennis_local_signup_student';
 const LOCAL_PROFILE_KEY = 'on_tennis_local_profile';
 const LOCAL_BOOKINGS_KEY = 'on_tennis_local_bookings';
 const LOCAL_RESERVATION_SESSIONS_KEY = 'on_tennis_local_reservation_sessions';
@@ -273,7 +274,29 @@ function writeLocalSession(enabled: boolean) {
   if (typeof window === 'undefined') return;
   try {
     if (enabled) localStorage.setItem(LOCAL_SESSION_KEY, '1');
-    else localStorage.removeItem(LOCAL_SESSION_KEY);
+    else {
+      localStorage.removeItem(LOCAL_SESSION_KEY);
+      localStorage.removeItem(LOCAL_SIGNUP_STUDENT_KEY);
+    }
+  } catch {
+    // Ignore storage failures in private or restricted browser contexts.
+  }
+}
+
+function isLocalSignupStudent() {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem(LOCAL_SIGNUP_STUDENT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeLocalSignupStudent(enabled: boolean) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (enabled) localStorage.setItem(LOCAL_SIGNUP_STUDENT_KEY, '1');
+    else localStorage.removeItem(LOCAL_SIGNUP_STUDENT_KEY);
   } catch {
     // Ignore storage failures in private or restricted browser contexts.
   }
@@ -413,6 +436,9 @@ function localRowsFor(table: string): any[] {
     case 'profiles_public':
       return [readLocalProfile()];
     case 'user_roles':
+      if (isLocalSignupStudent()) {
+        return [{ user_id: localUser.id, role: 'aluno' }];
+      }
       return [
         { user_id: localUser.id, role: 'aluno' },
         { user_id: localUser.id, role: 'professor' },
@@ -780,8 +806,24 @@ function createLocalSupabaseClient() {
               error: { message: 'Local user is not signed in.', name: 'LocalAuthRequired' },
             };
       },
-      signUp: async () => {
+      signUp: async ({ email }: { email: string }) => {
+        if (email.trim().toLowerCase() !== LOCAL_DEV_EMAIL) {
+          writeLocalSession(true);
+          writeLocalSignupStudent(true);
+          return {
+            data: {
+              user: {
+                ...localUser,
+                email: email.trim().toLowerCase(),
+                identities: [{ id: localUser.id }],
+              },
+              session: localSession,
+            },
+            error: null,
+          };
+        }
         writeLocalSession(true);
+        writeLocalSignupStudent(false);
         return {
           data: {
             user: { ...localUser, identities: [{ id: localUser.id }] },
@@ -801,8 +843,10 @@ function createLocalSupabaseClient() {
           };
         }
         writeLocalSession(true);
+        writeLocalSignupStudent(false);
         return { data: { user: localUser, session: localSession }, error: null };
       },
+      resend: async () => ({ data: {}, error: null }),
       signOut: async () => {
         writeLocalSession(false);
         return { error: null };

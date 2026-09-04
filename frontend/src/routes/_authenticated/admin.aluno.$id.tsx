@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { brl } from "@/lib/money";
 import { effectiveCheckoutStatus } from "@/lib/payment-security";
 import { venueBookingStartMs } from "@/lib/booking-schedule";
+import { formatBrazilPhone, whatsappUrl } from "@/lib/contact";
 import { format } from "date-fns";
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
@@ -198,9 +199,15 @@ function AlunoDetalhe() {
               <h1 className="type-h2">{profile.full_name ?? "Sem nome"}</h1>
               <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 type-small text-muted-foreground">
                 {profile.phone && (
-                  <span className="inline-flex items-center gap-1">
-                    <Phone className="h-3 w-3" /> {profile.phone}
-                  </span>
+                  <a
+                    href={whatsappUrl(profile.phone) ?? undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-semibold hover:text-foreground"
+                    aria-label={`Abrir WhatsApp de ${profile.full_name ?? "aluno"}`}
+                  >
+                    <Phone className="h-3 w-3" /> {formatBrazilPhone(profile.phone)}
+                  </a>
                 )}
                 {profile.birth_date && (
                   <span className="inline-flex items-center gap-1">

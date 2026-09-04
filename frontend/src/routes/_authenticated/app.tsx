@@ -4,10 +4,10 @@ import { Home, User, CalendarDays, ShieldCheck, GraduationCap, QrCode } from "lu
 import { supabase } from "@/integrations/supabase/client";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { TermsGate } from "@/components/TermsGate";
+import { StudentProfileGate } from "@/components/StudentProfileGate";
 import { SidebarShell, type SideNavGroup } from "@/components/SidebarShell";
 import { playPop } from "@/lib/sfx";
 import { Toaster } from "@/components/ui/sonner";
-import { getAudience, clearAudience } from "@/lib/session-audience";
 
 export const Route = createFileRoute("/_authenticated/app")({
   component: AppShell,
@@ -44,9 +44,8 @@ function AppShell() {
         supabase.from("user_roles").select("role").eq("user_id", u.user.id),
       ]);
       setName(data?.full_name ?? "");
-      // Só mostra atalho "Admin" se a sessão foi aberta como equipe E o usuário tem papel admin
       const hasAdminRole = (roles ?? []).some((r) => r.role === "admin");
-      setIsAdmin(hasAdminRole && getAudience() === "equipe");
+      setIsAdmin(hasAdminRole);
       if (data?.avatar_url) {
         const { data: signed } = await supabase.storage
           .from("avatars")
@@ -58,36 +57,39 @@ function AppShell() {
 
   const handleLogout = async () => {
     playPop();
-    clearAudience();
     await supabase.auth.signOut();
     navigate({ to: "/" });
   };
 
   return (
-    <TermsGate>
+    <>
       <Toaster />
-      <SidebarShell
-        groups={NAV}
-        user={{ name, avatarUrl: avatar }}
-        onLogout={handleLogout}
-        homeTo="/app"
-        headerRight={
-          <>
-            <NotificationsBell />
-            {isAdmin ? (
-              <Link
-                to="/admin"
-                onClick={() => playPop()}
-                className="btn-bounce flex items-center gap-2 rounded-full border border-primary px-4 py-2 text-sm font-bold text-foreground hover:bg-accent"
-              >
-                <ShieldCheck className="h-4 w-4" /> Admin
-              </Link>
-            ) : null}
-          </>
-        }
-      >
-        <Outlet />
-      </SidebarShell>
-    </TermsGate>
+      <StudentProfileGate>
+        <TermsGate>
+          <SidebarShell
+            groups={NAV}
+            user={{ name, avatarUrl: avatar }}
+            onLogout={handleLogout}
+            homeTo="/app"
+            headerRight={
+              <>
+                <NotificationsBell />
+                {isAdmin ? (
+                  <Link
+                    to="/admin"
+                    onClick={() => playPop()}
+                    className="btn-bounce flex items-center gap-2 rounded-full border border-primary px-4 py-2 text-sm font-bold text-foreground hover:bg-accent"
+                  >
+                    <ShieldCheck className="h-4 w-4" /> Admin
+                  </Link>
+                ) : null}
+              </>
+            }
+          >
+            <Outlet />
+          </SidebarShell>
+        </TermsGate>
+      </StudentProfileGate>
+    </>
   );
 }

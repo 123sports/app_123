@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
 import { PasswordInput } from "@/components/PasswordInput";
 import { Toaster } from "@/components/ui/sonner";
+import { friendlyAuthError } from "@/lib/auth-errors";
 
 export const Route = createFileRoute("/redefinir-senha")({
   component: ResetPasswordPage,
@@ -33,8 +34,8 @@ function ResetPasswordPage() {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (password.length < 8) {
-      toast.error("A senha precisa ter pelo menos 8 caracteres.");
+    if (password.length < 6) {
+      toast.error("A senha precisa ter pelo menos 6 caracteres.");
       return;
     }
     if (password !== confirmation) {
@@ -49,8 +50,8 @@ function ResetPasswordPage() {
       await supabase.auth.signOut();
       toast.success("Senha atualizada. Entre novamente.");
       navigate({ to: "/auth" });
-    } catch (error: any) {
-      toast.error(error?.message ?? "Não foi possível atualizar a senha.");
+    } catch (error: unknown) {
+      toast.error(friendlyAuthError(error, "passwordUpdate"));
     } finally {
       setBusy(false);
     }
@@ -81,7 +82,7 @@ function ResetPasswordPage() {
               <span className="mb-1 block type-eyebrow">Nova senha</span>
               <PasswordInput
                 required
-                minLength={8}
+                minLength={6}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 className="w-full border border-input bg-background px-4 py-2.5 text-sm"
@@ -91,7 +92,7 @@ function ResetPasswordPage() {
               <span className="mb-1 block type-eyebrow">Confirmar nova senha</span>
               <PasswordInput
                 required
-                minLength={8}
+                minLength={6}
                 value={confirmation}
                 onChange={(event) => setConfirmation(event.target.value)}
                 className="w-full border border-input bg-background px-4 py-2.5 text-sm"

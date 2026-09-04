@@ -31,7 +31,7 @@ function ConvitePage() {
 
   const accept = async () => {
     if (!invite) return;
-    if (form.password.length < 8) return toast.error("A senha precisa ter pelo menos 8 caracteres");
+    if (form.password.length < 6) return toast.error("A senha precisa ter pelo menos 6 caracteres");
     if (!form.full_name.trim()) return toast.error("Informe seu nome");
     setBusy(true);
     try {
@@ -109,7 +109,7 @@ function ConvitePage() {
               <label htmlFor="staff-invite-password" className="mb-1 block text-xs font-medium">Crie uma senha</label>
               <PasswordInput
                 id="staff-invite-password"
-                minLength={8}
+                minLength={6}
                 value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
                 className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
               />

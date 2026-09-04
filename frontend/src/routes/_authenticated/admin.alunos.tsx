@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { PersonList, PersonRow, PersonStat } from "@/components/PersonList";
+import { formatBrazilPhone } from "@/lib/contact";
 
 export const Route = createFileRoute("/_authenticated/admin/alunos")({
   component: AdminAlunos,
@@ -33,7 +34,14 @@ function AdminAlunos() {
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return t ? list.filter((a) => (a.full_name ?? "").toLowerCase().includes(t)) : list;
+    const phoneDigits = t.replace(/\D/g, "");
+    return t
+      ? list.filter(
+          (a) =>
+            (a.full_name ?? "").toLowerCase().includes(t) ||
+            (phoneDigits.length > 0 && (a.phone ?? "").replace(/\D/g, "").includes(phoneDigits)),
+        )
+      : list;
   }, [list, q]);
 
   return (
@@ -46,8 +54,9 @@ function AdminAlunos() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
-              value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar por nome…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar aluno"
               className="w-64 rounded-full border border-input bg-background pl-9 pr-3 py-2 text-sm"
             />
           </div>
@@ -65,7 +74,7 @@ function AdminAlunos() {
                 to="/admin/aluno/$id"
                 params={{ id: a.id }}
                 name={a.full_name ?? "Sem nome"}
-                meta={`${a.phone ?? "—"}${a.skill_level ? ` · ${a.skill_level}` : ""}`}
+                meta={`${a.phone ? formatBrazilPhone(a.phone) : "—"}${a.skill_level ? ` · ${a.skill_level}` : ""}`}
                 trailing={
                   <>
                     <PersonStat label="Reservas" value={a.bookings} />

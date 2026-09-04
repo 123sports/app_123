@@ -4,12 +4,16 @@
 
 - Apply every migration with `supabase db push` after reviewing `--dry-run`.
 - Keep `seeds/demo.sql` out of production.
-- Set the Auth Site URL to `https://app-123-fx8f.onrender.com`.
-- Add `https://app-123-fx8f.onrender.com/**`,
-  `https://app-123-fx8f.onrender.com/redefinir-senha` and approved localhost
-  preview URLs to Auth redirect URLs.
-- Configure a company SMTP provider and verify delivery because mandatory
-  e-mail confirmation is enabled.
+- Set the Auth Site URL to `https://app.olimpioneto.com.br`.
+- Allow the exact production redirects `https://app.olimpioneto.com.br/auth`
+  and `https://app.olimpioneto.com.br/redefinir-senha`. Keep the equivalent
+  Render fallback URLs while that subdomain remains enabled.
+- Keep signup e-mail confirmation disabled. Student accounts are validated by
+  their required name, WhatsApp, e-mail and password and are activated immediately.
+- Configure SMTP only if password recovery by e-mail will remain available.
+- Configure Cloudflare Turnstile for `app.olimpioneto.com.br`. First deploy its
+  public site key as `VITE_TURNSTILE_SITE_KEY` in Render; only then enable
+  Turnstile in Supabase Auth and store the Turnstile secret there.
 - Configure the Google provider in Supabase Auth before exposing the Google
   login button in production. Add the Supabase callback URL shown by the
   provider setup to the Google OAuth client, then set
@@ -25,7 +29,9 @@
 - Configure browser-safe Supabase values with the `VITE_` prefix.
 - Configure server Supabase values without the `VITE_` prefix.
 - Keep `SUPABASE_SECRET_KEY` server-only.
-- Set `APP_BASE_URL=https://app-123-fx8f.onrender.com`.
+- Set `APP_BASE_URL=https://app.olimpioneto.com.br`.
+- Set only the public Turnstile site key in `VITE_TURNSTILE_SITE_KEY`. Never
+  place the Turnstile secret in Render variables prefixed with `VITE_`.
 - Set `MERCADO_PAGO_ACCESS_TOKEN` and `MERCADO_PAGO_WEBHOOK_SECRET`.
 - Verify `/auth` and `/api/webhooks/mercadopago` after deployment.
 
@@ -35,7 +41,7 @@
 - Register a Pix key in that Mercado Pago account.
 - Start with test credentials and test users.
 - Register the test and production webhook URLs.
-- Use `https://app-123-fx8f.onrender.com/api/webhooks/mercadopago` in production.
+- Use `https://app.olimpioneto.com.br/api/webhooks/mercadopago` in production.
 - Enable the payment event and copy its secret signature to Render.
 - Activate production credentials only after end-to-end homologation.
 - Run a low-value real Pix and confirm the booking plus in-app notification.

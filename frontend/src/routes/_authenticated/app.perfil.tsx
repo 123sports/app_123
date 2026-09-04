@@ -5,6 +5,12 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
 import { PageHeader } from "@/components/PageHeader";
+import {
+  formatBrazilPhone,
+  isValidPersonName,
+  normalizeBrazilPhone,
+  normalizePersonName,
+} from "@/lib/contact";
 
 export const Route = createFileRoute("/_authenticated/app/perfil")({
   component: Perfil,
@@ -65,7 +71,7 @@ function Perfil() {
       if (data) {
         setP({
           full_name: data.full_name, avatar_url: data.avatar_url,
-          phone: data.phone, birth_date: data.birth_date,
+          phone: formatBrazilPhone(data.phone ?? ""), birth_date: data.birth_date,
           blood_type: data.blood_type, years_playing: data.years_playing,
           skill_level: data.skill_level, emergency_contact_name: data.emergency_contact_name,
           emergency_contact_phone: data.emergency_contact_phone, medical_notes: data.medical_notes,
@@ -121,12 +127,22 @@ function Perfil() {
     e.preventDefault();
     if (!userId) return;
     playPop();
+    const fullName = normalizePersonName(p.full_name ?? "");
+    const phone = normalizeBrazilPhone(p.phone ?? "");
+    if (!isValidPersonName(fullName)) {
+      toast.error("Informe seu nome completo.");
+      return;
+    }
+    if (!phone) {
+      toast.error("Informe um WhatsApp válido com DDD.");
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
-        full_name: p.full_name,
+        full_name: fullName,
         avatar_url: p.avatar_url,
-        phone: p.phone,
+        phone,
         birth_date: p.birth_date || null,
         blood_type: p.blood_type,
         years_playing: p.years_playing ? Number(p.years_playing) : null,
@@ -145,6 +161,11 @@ function Perfil() {
       };
       const { error } = await supabase.from("profiles").update(payload).eq("id", userId);
       if (error) throw error;
+      setP((current) => ({
+        ...current,
+        full_name: fullName,
+        phone: formatBrazilPhone(phone),
+      }));
       toast.success("Perfil salvo!");
     } catch (e: any) {
       toast.error(e?.message ?? "Não foi possível salvar o perfil. Tente de novo.");
@@ -228,7 +249,7 @@ function Perfil() {
             <div className="grid gap-3 md:grid-cols-2">
               <Field label="Nome completo"><Input value={p.full_name ?? ""} onChange={(v) => set("full_name", v)} /></Field>
               <Field label="CPF"><Input value={p.cpf ?? ""} onChange={(v) => set("cpf", v)} placeholder="000.000.000-00" /></Field>
-              <Field label="Telefone"><Input value={p.phone ?? ""} onChange={(v) => set("phone", v)} placeholder="(11) 99999-9999" /></Field>
+              <Field label="WhatsApp com DDD"><Input type="tel" value={p.phone ?? ""} onChange={(v) => set("phone", formatBrazilPhone(v))} placeholder="(11) 99999-9999" /></Field>
               <Field label="Data de nascimento"><Input type="date" value={p.birth_date ?? ""} onChange={(v) => set("birth_date", v)} /></Field>
               <Field label="Endereço completo" className="md:col-span-2"><Input value={p.address ?? ""} onChange={(v) => set("address", v)} placeholder="Rua, número, bairro, cidade/UF" /></Field>
               <Field label="Tipo sanguíneo">
