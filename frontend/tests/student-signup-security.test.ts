@@ -36,6 +36,17 @@ const requiredFieldsMigrationSource = readFileSync(
   ),
   "utf8",
 );
+const hardeningMigrationSource = readFileSync(
+  new URL(
+    "../../backend/supabase/migrations/20260904020000_payment_and_signup_hardening.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const staffInviteSource = readFileSync(
+  new URL("../src/routes/convite-equipe.$token.tsx", import.meta.url),
+  "utf8",
+);
 
 test("student signup sends only normalized contact metadata and no requested role", () => {
   assert.match(authSource, /full_name: normalizedName/);
@@ -66,6 +77,22 @@ test("database rejects incomplete student contact even when the frontend is bypa
   assert.match(requiredFieldsMigrationSource, /v_requested_name IS NULL/);
   assert.match(requiredFieldsMigrationSource, /v_phone IS NULL/);
   assert.match(requiredFieldsMigrationSource, /v_invite\.id IS NULL/);
+});
+
+test("a staff email alone cannot promote a public registration", () => {
+  assert.match(hardeningMigrationSource, /staff_invite_token/);
+  assert.match(hardeningMigrationSource, /invite\.token = v_invite_token/);
+  assert.match(hardeningMigrationSource, /lower\(invite\.email\) = lower\(NEW\.email\)/);
+  assert.match(hardeningMigrationSource, /VALUES \(NEW\.id, 'aluno'\)/);
+  assert.doesNotMatch(
+    hardeningMigrationSource,
+    /FROM public\.staff_invites\s+WHERE lower\(email\) = lower\(NEW\.email\)/,
+  );
+  assert.match(staffInviteSource, /staff_invite_token: token/);
+  assert.match(
+    staffInviteSource,
+    /rpc\("accept_staff_invite",\s*\{\s*_token: token,?\s*\}\)/,
+  );
 });
 
 test("student application blocks incomplete contact profiles", () => {

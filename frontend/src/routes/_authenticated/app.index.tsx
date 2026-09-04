@@ -42,7 +42,7 @@ function Dashboard() {
         .createSignedUrl(p.avatar_url, 3600);
       setAvatar(signed?.signedUrl ?? null);
     }
-    const today = new Date().toISOString().slice(0, 10);
+    const today = format(new Date(), "yyyy-MM-dd");
     const { data: ups } = await supabase
       .from("bookings")
       .select("id, session_id, booking_date, start_hour, type, status")

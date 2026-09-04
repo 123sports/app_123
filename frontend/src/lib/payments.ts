@@ -53,7 +53,15 @@ export type CreateBookingPixInput = {
   professorId: string | null;
 };
 
-export type CreateClassPlanPixInput = { planId: string };
+export type CreateClassPlanPixInput = {
+  planId: string;
+  initialBooking?: {
+    bookingDate: string;
+    startHour: number;
+    bookingType: "aula_individual" | "aula_dupla" | "aula_trio" | "aula_quarteto";
+    professorId: string;
+  };
+};
 
 function uuid() {
   return crypto.randomUUID();
@@ -337,8 +345,9 @@ export async function createClassPlanPixCheckout(
 
   const orderId = uuid();
   const paymentId = uuid();
+  const bookingId = input.initialBooking ? uuid() : null;
   const expiresAt = new Date(Date.now() + LOCAL_PIX_HOLD_MINUTES * 60 * 1000).toISOString();
-  const description = `${plan.title} - ${plan.credit_quantity} ${plan.credit_quantity === 1 ? "aula" : "aulas"}`;
+  let description = `${plan.title} - ${plan.credit_quantity} ${plan.credit_quantity === 1 ? "aula" : "aulas"}`;
   const pixCopyPaste = fakePixPayload(orderId, plan.price_cents);
   const qrCodeDataUrl = await QRCode.toDataURL(pixCopyPaste, {
     errorCorrectionLevel: "M",
@@ -356,47 +365,199 @@ export async function createClassPlanPixCheckout(
     class_duration_min: plan.class_duration_min,
   };
 
-  await (supabase as any).from("checkout_orders").insert({
-    id: orderId,
-    user_id: auth.user.id,
-    kind: "class_plan",
-    status: "pending",
-    currency: "BRL",
-    amount_cents: plan.price_cents,
-    description,
-    provider: "local",
-    expires_at: expiresAt,
-    metadata: { plan_snapshot: snapshot },
-  });
-  await (supabase as any).from("checkout_items").insert({
-    checkout_order_id: orderId,
-    item_type: "class_plan",
-    reference_id: plan.id,
-    description,
-    quantity: 1,
-    unit_amount_cents: plan.price_cents,
-    total_amount_cents: plan.price_cents,
-    metadata: snapshot,
-  });
-  await (supabase as any).from("payment_attempts").insert({
-    id: paymentId,
-    checkout_order_id: orderId,
-    provider: "local",
-    provider_order_id: `LOCAL-${orderId}`,
-    provider_payment_id: `LOCAL-PAY-${paymentId}`,
-    payment_method: "pix",
-    status: "pending",
-    amount_cents: plan.price_cents,
-    qr_code: pixCopyPaste,
-    qr_code_base64: qrCodeDataUrl,
-    expires_at: expiresAt,
-  });
+  let session: any = null;
+  let createdSession = false;
+  let bookingSnapshot: Record<string, unknown> | null = null;
+  if (input.initialBooking) {
+    const initial = input.initialBooking;
+    assertBookingSchedule(initial.bookingDate, initial.startHour);
+    const modality =
+      initial.bookingType === "aula_individual"
+        ? "individual"
+        : initial.bookingType === "aula_dupla"
+          ? "dupla"
+          : "grupo";
+    if (plan.credit_modality !== modality) {
+      throw new Error("O plano escolhido não aceita este tipo de aula.");
+    }
+    if (!initial.professorId) throw new Error("Selecione o professor antes de continuar.");
+
+    const [{ data: product }, { data: sessions }, { data: occupied }, { data: blocks }] =
+      await Promise.all([
+        (supabase as any)
+          .from("pricing")
+          .select("*")
+          .eq("booking_type", initial.bookingType)
+          .eq("active", true)
+          .maybeSingle(),
+        (supabase as any)
+          .from("reservation_sessions")
+          .select("*")
+          .eq("booking_date", initial.bookingDate)
+          .eq("start_hour", initial.startHour)
+          .eq("status", "open"),
+        (supabase as any).from("bookings_occupancy").select("id, session_id, user_id"),
+        (supabase as any)
+          .from("blocked_slots")
+          .select("professor_id")
+          .eq("block_date", initial.bookingDate)
+          .eq("start_hour", initial.startHour),
+      ]);
+    if (
+      !product ||
+      !product.requires_professor ||
+      !Number.isInteger(product.student_capacity) ||
+      product.student_capacity < 1 ||
+      !Number.isInteger(product.price_cents) ||
+      product.price_cents <= 0
+    ) {
+      throw new Error("Este tipo de aula não está disponível.");
+    }
+    if (
+      (blocks ?? []).some(
+        (block: any) => block.professor_id == null || block.professor_id === initial.professorId,
+      )
+    ) {
+      throw new Error("O horário está bloqueado.");
+    }
+
+    session = (sessions ?? [])[0] ?? null;
+    if (session) {
+      if (
+        session.product_type !== initial.bookingType ||
+        session.professor_id !== initial.professorId
+      ) {
+        throw new Error("Este horário possui outro tipo de aula ou professor.");
+      }
+      const participants = (occupied ?? []).filter((row: any) => row.session_id === session.id);
+      if (participants.some((row: any) => row.user_id === auth.user.id)) {
+        throw new Error("Você já possui uma vaga neste horário.");
+      }
+      if (participants.length >= session.capacity) {
+        throw new Error("A última vaga deste horário já foi ocupada.");
+      }
+    } else {
+      createdSession = true;
+      session = {
+        id: uuid(),
+        booking_date: initial.bookingDate,
+        start_hour: initial.startHour,
+        professor_id: initial.professorId,
+        product_type: initial.bookingType,
+        capacity: product.student_capacity,
+        unit_price_cents: product.price_cents,
+        status: "open",
+      };
+    }
+
+    bookingSnapshot = {
+      booking_id: bookingId,
+      session_id: session.id,
+      booking_date: initial.bookingDate,
+      start_hour: initial.startHour,
+      booking_type: initial.bookingType,
+      professor_id: session.professor_id,
+      capacity: session.capacity,
+    };
+    description += `. Primeira aula em ${initial.bookingDate
+      .split("-")
+      .reverse()
+      .join("/")} às ${String(initial.startHour).padStart(2, "0")}:00`;
+  }
+
+  const metadata = {
+    plan_snapshot: snapshot,
+    ...(bookingSnapshot
+      ? {
+          initial_booking: bookingSnapshot,
+          booking_ids: [bookingId],
+          session_ids: [session.id],
+        }
+      : {}),
+  };
+
+  try {
+    if (createdSession) {
+      const { error } = await (supabase as any).from("reservation_sessions").insert(session);
+      if (error) throw error;
+    }
+    const { error: orderError } = await (supabase as any).from("checkout_orders").insert({
+      id: orderId,
+      user_id: auth.user.id,
+      kind: "class_plan",
+      status: "pending",
+      currency: "BRL",
+      amount_cents: plan.price_cents,
+      description,
+      provider: "local",
+      expires_at: expiresAt,
+      metadata,
+    });
+    if (orderError) throw orderError;
+    if (input.initialBooking && bookingId) {
+      const { error: bookingError } = await (supabase as any).from("bookings").insert({
+        id: bookingId,
+        session_id: session.id,
+        user_id: auth.user.id,
+        professor_id: session.professor_id,
+        booking_date: input.initialBooking.bookingDate,
+        start_hour: input.initialBooking.startHour,
+        duration_hours: 1,
+        type: input.initialBooking.bookingType,
+        status: "pendente",
+        payment_status: "pendente",
+        payment_method: "pix",
+        price_cents: session.unit_price_cents,
+        amount_cents: session.unit_price_cents,
+        checkout_order_id: orderId,
+        credit_grant_id: null,
+        hold_expires_at: expiresAt,
+        confirmed_at: null,
+        attended: null,
+      });
+      if (bookingError) throw bookingError;
+    }
+    const { error: itemError } = await (supabase as any).from("checkout_items").insert({
+      checkout_order_id: orderId,
+      item_type: "class_plan",
+      reference_id: plan.id,
+      description,
+      quantity: 1,
+      unit_amount_cents: plan.price_cents,
+      total_amount_cents: plan.price_cents,
+      metadata: snapshot,
+    });
+    if (itemError) throw itemError;
+    const { error: paymentError } = await (supabase as any).from("payment_attempts").insert({
+      id: paymentId,
+      checkout_order_id: orderId,
+      provider: "local",
+      provider_order_id: `LOCAL-${orderId}`,
+      provider_payment_id: `LOCAL-PAY-${paymentId}`,
+      payment_method: "pix",
+      status: "pending",
+      amount_cents: plan.price_cents,
+      qr_code: pixCopyPaste,
+      qr_code_base64: qrCodeDataUrl,
+      expires_at: expiresAt,
+    });
+    if (paymentError) throw paymentError;
+  } catch (error) {
+    await (supabase as any).from("payment_attempts").delete().eq("checkout_order_id", orderId);
+    await (supabase as any).from("checkout_items").delete().eq("checkout_order_id", orderId);
+    await (supabase as any).from("bookings").delete().eq("checkout_order_id", orderId);
+    await (supabase as any).from("checkout_orders").delete().eq("id", orderId);
+    if (createdSession && session) {
+      await (supabase as any).from("reservation_sessions").delete().eq("id", session.id);
+    }
+    throw error;
+  }
 
   return {
     orderId,
     paymentId,
-    bookingIds: [],
-    sessionIds: [],
+    bookingIds: bookingId ? [bookingId] : [],
+    sessionIds: session ? [session.id] : [],
     amountCents: plan.price_cents,
     pixCopyPaste,
     qrCodeDataUrl,
@@ -560,10 +721,81 @@ export async function approveLocalPixCheckout(checkout: PixCheckout): Promise<Pi
     if (
       !snapshot?.plan_id ||
       !Number.isInteger(snapshot.credit_quantity) ||
-      snapshot.credit_quantity <= 0
+      snapshot.credit_quantity <= 0 ||
+      !["individual", "dupla", "grupo"].includes(snapshot.credit_modality) ||
+      snapshot.price_cents !== order.amount_cents
     ) {
       throw new Error("Os dados deste plano estão incompletos.");
     }
+
+    const initial = order.metadata?.initial_booking;
+    let initialBooking: any = null;
+    let initialSession: any = null;
+    if (initial) {
+      const [{ data: booking }, { data: session }, { data: occupied }] = await Promise.all([
+        (supabase as any)
+          .from("bookings")
+          .select("*")
+          .eq("id", initial.booking_id)
+          .eq("checkout_order_id", order.id)
+          .maybeSingle(),
+        (supabase as any)
+          .from("reservation_sessions")
+          .select("*")
+          .eq("id", initial.session_id)
+          .maybeSingle(),
+        (supabase as any).from("bookings_occupancy").select("id, session_id"),
+      ]);
+      const expectedModality =
+        booking?.type === "aula_individual"
+          ? "individual"
+          : booking?.type === "aula_dupla"
+            ? "dupla"
+            : booking?.type === "aula_trio" || booking?.type === "aula_quarteto"
+              ? "grupo"
+              : null;
+      const occupancy = (occupied ?? []).filter(
+        (row: any) => row.session_id === session?.id,
+      ).length;
+      if (
+        !booking ||
+        !session ||
+        booking.user_id !== order.user_id ||
+        booking.status !== "pendente" ||
+        booking.payment_status !== "pendente" ||
+        !booking.hold_expires_at ||
+        new Date(booking.hold_expires_at).getTime() <= Date.now() ||
+        session.status !== "open" ||
+        booking.session_id !== session.id ||
+        booking.booking_date !== session.booking_date ||
+        booking.start_hour !== session.start_hour ||
+        booking.duration_hours !== 1 ||
+        booking.type !== session.product_type ||
+        booking.professor_id !== session.professor_id ||
+        booking.price_cents !== session.unit_price_cents ||
+        booking.amount_cents !== session.unit_price_cents ||
+        initial.booking_id !== booking.id ||
+        initial.session_id !== session.id ||
+        initial.booking_date !== booking.booking_date ||
+        initial.start_hour !== booking.start_hour ||
+        initial.booking_type !== booking.type ||
+        initial.professor_id !== booking.professor_id ||
+        initial.capacity !== session.capacity ||
+        !Array.isArray(order.metadata?.booking_ids) ||
+        order.metadata.booking_ids.length !== 1 ||
+        order.metadata.booking_ids[0] !== booking.id ||
+        !Array.isArray(order.metadata?.session_ids) ||
+        order.metadata.session_ids.length !== 1 ||
+        order.metadata.session_ids[0] !== session.id ||
+        expectedModality !== snapshot.credit_modality ||
+        occupancy > session.capacity
+      ) {
+        throw new Error("A vaga vinculada ao plano não está mais disponível.");
+      }
+      initialBooking = booking;
+      initialSession = session;
+    }
+
     const paidAt = new Date().toISOString();
     const grantId = uuid();
     await (supabase as any)
@@ -609,6 +841,68 @@ export async function approveLocalPixCheckout(checkout: PixCheckout): Promise<Pi
       kind: "credits_granted",
       related_checkout_order_id: order.id,
     });
+
+    if (initialBooking && initialSession) {
+      const allocationId = uuid();
+      await (supabase as any)
+        .from("bookings")
+        .update({
+          status: "confirmada",
+          payment_status: "pago",
+          payment_method: "credito_plano",
+          price_cents: 0,
+          amount_cents: 0,
+          checkout_order_id: null,
+          credit_grant_id: grantId,
+          hold_expires_at: null,
+          confirmed_at: paidAt,
+          attended: null,
+        })
+        .eq("id", initialBooking.id);
+      await (supabase as any).from("student_credit_allocations").insert({
+        id: allocationId,
+        grant_id: grantId,
+        user_id: order.user_id,
+        booking_id: initialBooking.id,
+        status: "reserved",
+        reserved_at: paidAt,
+        resolved_at: null,
+      });
+      await (supabase as any).from("student_credit_ledger").insert({
+        user_id: order.user_id,
+        grant_id: grantId,
+        booking_id: initialBooking.id,
+        checkout_order_id: order.id,
+        entry_type: "booking_debit",
+        credit_delta: -1,
+        idempotency_key: `booking-debit:${initialBooking.id}`,
+        reason: "Primeira aula reservada junto com a compra do plano.",
+        actor_user_id: order.user_id,
+        metadata: {
+          booking_date: initialBooking.booking_date,
+          start_hour: initialBooking.start_hour,
+          session_id: initialSession.id,
+          source: "plan_checkout",
+        },
+        previous_hash: "local",
+        entry_hash: `local-${uuid()}`,
+        created_at: paidAt,
+      });
+      await (supabase as any).from("notifications").insert({
+        user_id: order.user_id,
+        title: "Aula confirmada",
+        body: `Sua vaga para ${initialBooking.booking_date
+          .split("-")
+          .reverse()
+          .slice(0, 2)
+          .join(
+            "/",
+          )} às ${String(initialBooking.start_hour).padStart(2, "0")}:00 foi confirmada com 1 crédito.`,
+        kind: "credit_booking_confirmed",
+        related_booking_id: initialBooking.id,
+        related_checkout_order_id: order.id,
+      });
+    }
     return { ...checkout, status: "paid" };
   }
 

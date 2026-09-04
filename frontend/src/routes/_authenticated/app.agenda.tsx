@@ -501,11 +501,28 @@ function Agenda() {
   };
 
   const buySelectedPlan = async () => {
-    if (!activePlan) return;
+    const startHour = [...pendingHours][0];
+    const selectedSession = startHour == null ? null : sessionsByHour.get(startHour);
+    const bookingProfessor = selectedSession?.professor_id ?? effectiveProfessorId;
+    if (!activePlan || !activeProduct || startHour == null) return;
+    if (!bookingProfessor) {
+      toast.error("Selecione o professor antes de continuar.");
+      return;
+    }
     playPop();
     setBuyingPlan(true);
     try {
-      setCheckout(await createClassPlanPixCheckout({ planId: activePlan.id }));
+      setCheckout(
+        await createClassPlanPixCheckout({
+          planId: activePlan.id,
+          initialBooking: {
+            bookingDate: selectedDate,
+            startHour,
+            bookingType: type as "aula_individual" | "aula_dupla" | "aula_trio" | "aula_quarteto",
+            professorId: bookingProfessor,
+          },
+        }),
+      );
     } catch (error: any) {
       toast.error(error?.message ?? "Não foi possível gerar o Pix deste plano.");
     } finally {
@@ -916,12 +933,12 @@ function Agenda() {
                         ) : (
                           <QrCode className="h-4 w-4" />
                         )}
-                        Comprar plano com Pix
+                        Comprar plano e reservar
                       </button>
                       <p className="text-center text-xs text-muted-foreground">
-                        O Pix compra o plano, mas não bloqueia este horário. Após a confirmação,
-                        finalize a reserva com um crédito; se a vaga for ocupada, o crédito
-                        continuará disponível para outro horário.
+                        Esta vaga fica protegida enquanto o Pix estiver pendente. Quando o pagamento
+                        for confirmado, o plano será ativado e 1 crédito confirmará automaticamente
+                        esta aula.
                       </p>
                     </>
                   )}
@@ -1005,7 +1022,10 @@ function Agenda() {
         <PixCheckoutDialog
           checkout={checkout}
           onClose={() => setCheckout(null)}
-          onPaid={() => void Promise.all([loadMonth(), loadCredits()])}
+          onPaid={() => {
+            setPendingHours(new Set());
+            void Promise.all([loadMonth(), loadCredits()]);
+          }}
         />
       )}
     </div>

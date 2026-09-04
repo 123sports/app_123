@@ -80,17 +80,20 @@ try {
   await groupBookingDate.click();
   await page.getByRole("button", { name: /11:00 Livre/ }).click();
   await page.getByText(/1 de 3 vagas ocupadas e 2 vagas restantes/).waitFor();
-  await page.getByRole("button", { name: "Comprar plano com Pix" }).click();
+  await page.getByRole("button", { name: "Comprar plano e reservar" }).click();
   await page.getByRole("button", { name: "Simular pagamento aprovado" }).click();
   await page
-    .getByText(/Pagamento aprovado e cr.ditos liberados/, { exact: true })
+    .getByText(/Pagamento aprovado, plano ativado e aula reservada/, { exact: true })
     .last()
     .waitFor();
   await page.getByRole("button", { name: "Concluir", exact: true }).click();
-  await page.getByRole("button", { name: /Reservar com 1 cr.dito/ }).click();
-  await page.getByText(/Aula confirmada com cr.dito/, { exact: true }).waitFor();
   await page.getByRole("button", { name: /11:00 Sua vaga 1\/3 · 2 restantes/ }).waitFor();
   await page.getByText(/Sua vaga · 1\/3 ocupadas · 2 restantes/).waitFor();
+  assert.equal(
+    await page.getByRole("button", { name: /Reservar com 1 cr.dito/ }).count(),
+    0,
+    "The confirmed slot remained selected and offered a duplicate credit booking.",
+  );
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Cancelar aula" }).click();
   await page.getByText(/Aula cancelada e cr.dito devolvido/, { exact: true }).waitFor();
@@ -103,23 +106,25 @@ try {
   }
   await safeBookingDate.click();
   await page.getByRole("button", { name: /10:00 Livre/ }).click();
-  await page.getByRole("button", { name: "Comprar plano com Pix" }).click();
+  await page.getByRole("button", { name: "Comprar plano e reservar" }).click();
   await page.getByRole("heading", { name: "Pagar com Pix" }).waitFor();
   await page.getByRole("button", { name: "Simular pagamento aprovado" }).click();
-  await page.getByText("Pagamento aprovado e créditos liberados", { exact: true }).last().waitFor();
+  await page
+    .getByText("Pagamento aprovado, plano ativado e aula reservada", { exact: true })
+    .last()
+    .waitFor();
   await page.getByRole("button", { name: "Concluir", exact: true }).click();
-  await page.getByRole("button", { name: "Reservar com 1 crédito" }).click();
-  await page.getByText("Aula confirmada com crédito", { exact: true }).waitFor();
+  await page.getByRole("button", { name: /10:00 Sua vaga/ }).waitFor();
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Cancelar aula" }).click();
-  await page.getByText("Aula cancelada e crédito devolvido", { exact: true }).waitFor();
+  await page.getByText("Aula cancelada e crédito devolvido", { exact: true }).last().waitFor();
 
   assert.deepEqual(pageErrors, [], `Browser errors: ${pageErrors.join(" | ")}`);
   console.log("PASS: future attendance and completion actions are blocked.");
   console.log("PASS: legacy per-booking prices are hidden from the administrator.");
   console.log("PASS: the student sees only plans and the supported class capacities.");
   console.log("PASS: a three-seat class shows one occupied seat and two remaining seats.");
-  console.log("PASS: plan Pix creates credit, booking consumes it and cancellation returns it.");
+  console.log("PASS: plan Pix atomically grants credits and confirms the selected booking.");
 } finally {
   await browser.close();
 }

@@ -42,7 +42,7 @@ export const reconcileReviewedPaymentServer = createServerFn({ method: "POST" })
 
     const { data: order, error: orderError } = await (supabaseAdmin as any)
       .from("checkout_orders")
-      .select("id, user_id, kind, status, amount_cents, currency")
+      .select("id, user_id, kind, status, amount_cents, currency, metadata")
       .eq("id", data.orderId)
       .maybeSingle();
     if (orderError) throw new Error(orderError.message);
@@ -85,6 +85,44 @@ export const reconcileReviewedPaymentServer = createServerFn({ method: "POST" })
         "O pagamento consultado não corresponde ao valor, moeda, método ou referência deste pedido.",
       );
     }
+    if (mappedStatus === "refunded") {
+      const refundedAt = new Date().toISOString();
+      const { error: attemptRefundError } = await (supabaseAdmin as any)
+        .from("payment_attempts")
+        .update({
+          status: "refunded",
+          provider_payload: safeMercadoPagoPayload(payment),
+        })
+        .eq("id", attempt.id);
+      if (attemptRefundError) throw new Error(attemptRefundError.message);
+
+      const { data: refundedOrder, error: orderRefundError } = await (supabaseAdmin as any)
+        .from("checkout_orders")
+        .update({ status: "refunded", refunded_at: refundedAt })
+        .eq("id", order.id)
+        .eq("status", "paid_needs_review")
+        .select("status")
+        .maybeSingle();
+      if (orderRefundError) throw new Error(orderRefundError.message);
+      if (!refundedOrder) {
+        return reviewResult(
+          "O pagamento mudou durante a conferência. Atualize a tela e tente novamente.",
+        );
+      }
+
+      await (supabaseAdmin as any)
+        .from("notifications")
+        .update({ read: true })
+        .eq("kind", "payment_review")
+        .eq("related_checkout_order_id", order.id);
+
+      return {
+        status: "refunded" as const,
+        resolved: true,
+        message:
+          "O Mercado Pago confirmou o estorno. Os créditos foram bloqueados e as aulas futuras vinculadas foram liberadas.",
+      };
+    }
     if (mappedStatus !== "paid") {
       return reviewResult(
         mappedStatus === "pending"
@@ -117,7 +155,9 @@ export const reconcileReviewedPaymentServer = createServerFn({ method: "POST" })
     }
 
     const paidAt = payment.date_approved ?? new Date().toISOString();
-    if (order.kind === "booking" && !(await hasCompleteActiveBookingHold(order))) {
+    const hasActiveBookingHold = await hasCompleteActiveBookingHold(order);
+    let settledWithoutBooking = false;
+    if (order.kind === "booking" && !hasActiveBookingHold) {
       const { error: restoreError } = await (supabaseAdmin as any).rpc(
         "restore_review_booking_checkout",
         { p_order_id: order.id, p_paid_at: paidAt },
@@ -127,6 +167,17 @@ export const reconcileReviewedPaymentServer = createServerFn({ method: "POST" })
           `${restoreError.message} Combine uma nova data com o aluno antes de encerrar a conferência.`,
         );
       }
+    } else if (
+      order.kind === "class_plan" &&
+      order.metadata?.initial_booking &&
+      !hasActiveBookingHold
+    ) {
+      const { error: settleError } = await (supabaseAdmin as any).rpc(
+        "settle_reviewed_plan_checkout_without_booking",
+        { p_order_id: order.id, p_paid_at: paidAt },
+      );
+      if (settleError) return reviewResult(settleError.message);
+      settledWithoutBooking = true;
     } else {
       const { data: paidOrder, error: paidOrderError } = await (supabaseAdmin as any)
         .from("checkout_orders")
@@ -152,8 +203,9 @@ export const reconcileReviewedPaymentServer = createServerFn({ method: "POST" })
     return {
       status: "paid" as const,
       resolved: true,
-      message:
-        order.kind === "class_plan"
+      message: settledWithoutBooking
+        ? "Pix confirmado e créditos liberados. A vaga expirou; o aluno deve escolher outro horário."
+        : order.kind === "class_plan"
           ? "Pix confirmado e créditos liberados para o aluno."
           : "Pix confirmado e reserva reativada com segurança.",
     };

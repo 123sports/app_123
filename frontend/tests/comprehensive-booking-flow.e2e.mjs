@@ -105,12 +105,14 @@ async function writeRows(page, key, rows) {
 async function approveOpenPix(page) {
   await page.getByRole("heading", { name: "Pagar com Pix" }).waitFor();
   await page.getByRole("button", { name: "Simular pagamento aprovado" }).click();
-  await page.getByText(/Pagamento aprovado e cr.ditos liberados/, { exact: true }).waitFor();
+  await page
+    .getByText(/Pagamento aprovado, plano ativado e aula reservada/, { exact: true })
+    .waitFor();
   await page.getByRole("button", { name: "Concluir", exact: true }).click();
 }
 
 async function buySelectedAgendaPlan(page) {
-  await page.getByRole("button", { name: "Comprar plano com Pix" }).click();
+  await page.getByRole("button", { name: "Comprar plano e reservar" }).click();
   await approveOpenPix(page);
 }
 
@@ -225,7 +227,7 @@ await runCase(
     await page.getByLabel(/Plano de aula/).selectOption("20000000-0000-4000-8000-000000000001");
     await selectDate(page, 7);
     await page.getByRole("button", { name: /10:00 Livre/ }).click();
-    await page.getByRole("button", { name: "Comprar plano com Pix" }).click();
+    await page.getByRole("button", { name: "Comprar plano e reservar" }).click();
 
     let orders = await readRows(page, storageKeys.orders);
     assert.equal(orders.length, 1);
@@ -233,6 +235,8 @@ await runCase(
     assert.equal(orders[0].amount_cents, 25000);
     assert.equal(orders[0].metadata.plan_snapshot.credit_modality, "individual");
     assert.equal(orders[0].metadata.plan_snapshot.credit_quantity, 1);
+    assert.equal(orders[0].metadata.initial_booking.booking_date, isoDateFromNow(7));
+    assert.equal(orders[0].metadata.initial_booking.start_hour, 10);
 
     const plans = await readRows(page, storageKeys.plans);
     const sourcePlans = plans.length
@@ -265,11 +269,15 @@ await runCase(
     assert.equal(orders[0].amount_cents, 25000);
     assert.equal(grantsAfterPayment[0].credits_granted, 1);
     assert.equal(grantsAfterPayment[0].amount_paid_cents, 25000);
-    assert.equal(ledgerAfterPayment.length, 1);
-    assert.equal(ledgerAfterPayment[0].entry_type, "purchase_grant");
-    assert.equal(ledgerAfterPayment[0].credit_delta, 1);
+    assert.deepEqual(
+      ledgerAfterPayment.map((entry) => entry.entry_type),
+      ["purchase_grant", "booking_debit"],
+    );
+    assert.deepEqual(
+      ledgerAfterPayment.map((entry) => entry.credit_delta),
+      [1, -1],
+    );
 
-    await reserveSelectedSlot(page);
     const sessions = await readRows(page, storageKeys.sessions);
     const bookings = await readRows(page, storageKeys.bookings);
     const allocations = await readRows(page, storageKeys.allocations);
@@ -363,7 +371,6 @@ await runCase(
     await selectDate(page, 8);
     await page.getByRole("button", { name: /11:00 Livre/ }).click();
     await buySelectedAgendaPlan(page);
-    await reserveSelectedSlot(page);
     await page.getByRole("button", { name: /11:00 Sua vaga 1\/3.*2 restantes/ }).waitFor();
 
     let sessions = await readRows(page, storageKeys.sessions);
@@ -432,7 +439,7 @@ await runCase(
     await page.getByLabel(/Plano de aula/).selectOption("20000000-0000-4000-8000-000000000001");
     await page.getByRole("button", { name: /10:00 Livre/ }).click();
     assert.equal(await page.getByRole("button", { name: /Reservar com 1 cr.dito/ }).count(), 0);
-    await page.getByRole("button", { name: "Comprar plano com Pix" }).waitFor();
+    await page.getByRole("button", { name: "Comprar plano e reservar" }).waitFor();
     assert.deepEqual(pageErrors, []);
   },
 );
@@ -447,7 +454,6 @@ await runCase(
     await selectDate(page, 10);
     await page.getByRole("button", { name: /15:00 Livre/ }).click();
     await buySelectedAgendaPlan(page);
-    await reserveSelectedSlot(page);
     await page.getByRole("button", { name: /15:00 Sua vaga 1\/2.*1 restante/ }).waitFor();
 
     const bookingDate = isoDateFromNow(10);
@@ -499,7 +505,6 @@ await runCase("late cancellation releases the seat but forfeits the credit", asy
   await selectDate(page, 5);
   await page.getByRole("button", { name: /14:00 Livre/ }).click();
   await buySelectedAgendaPlan(page);
-  await reserveSelectedSlot(page);
 
   await setAudience(page, "equipe");
   await page.goto(`${baseUrl}/admin/configuracoes`, { waitUntil: "networkidle" });

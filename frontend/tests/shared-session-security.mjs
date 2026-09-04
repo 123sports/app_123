@@ -92,7 +92,10 @@ async function createUser(label) {
     email,
     password,
     email_confirm: true,
-    user_metadata: { full_name: `Session ${label}` },
+    user_metadata: {
+      full_name: `Session ${label}`,
+      phone: "+5511999999999",
+    },
   });
   if (error || !data.user) throw error ?? new Error("Temporary user was not created.");
   createdUserIds.push(data.user.id);

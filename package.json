@@ -26,6 +26,7 @@
     "supabase:link": "npx supabase --workdir backend link",
     "supabase:dry-run": "npx supabase --workdir backend db push --linked --dry-run",
     "supabase:lint": "npx supabase --workdir backend db lint --linked --level error --fail-on error",
+    "test:db:plan-checkout": "npx supabase --workdir backend db query --linked --file supabase/tests/plan_checkout_initial_booking_smoke.sql",
     "supabase:push": "npx supabase --workdir backend db push --linked",
     "supabase:config:push": "cd backend && npx supabase config push"
   }

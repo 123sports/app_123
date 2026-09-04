@@ -138,14 +138,22 @@ test("staff receives a single notification when admin and professor are the same
   );
 });
 
-test("plan payments bypass booking-hold validation only by explicit kind", () => {
+test("paid checkouts validate any booking hold declared by the order", () => {
   assert.match(
     paymentFunctions,
-    /mappedStatus === "paid"[\s\S]*order\.kind === "booking"[\s\S]*hasCompleteActiveBookingHold/,
+    /mappedStatus === "paid"[\s\S]*order\.status === "pending"[\s\S]*hasCompleteActiveBookingHold/,
   );
   assert.match(
     webhook,
-    /mappedStatus === "paid"[\s\S]*order\.kind === "booking"[\s\S]*hasCompleteActiveBookingHold/,
+    /mappedStatus === "paid"[\s\S]*order\.status === "pending"[\s\S]*hasCompleteActiveBookingHold/,
+  );
+  assert.doesNotMatch(
+    paymentFunctions,
+    /order\.kind === "booking"\s*&&\s*!\(await hasCompleteActiveBookingHold/,
+  );
+  assert.doesNotMatch(
+    webhook,
+    /order\.kind === "booking"\s*&&\s*!\(await hasCompleteActiveBookingHold/,
   );
 });
 

@@ -213,7 +213,7 @@ export async function handleMercadoPagoWebhook(request: Request) {
 
   const { data: order, error: orderError } = await (supabaseAdmin as any)
     .from("checkout_orders")
-    .select("id, kind, amount_cents, currency, status, expires_at")
+    .select("id, kind, amount_cents, currency, status, expires_at, metadata")
     .eq("id", orderId)
     .maybeSingle();
   if (orderError) throw orderError;
@@ -287,7 +287,6 @@ export async function handleMercadoPagoWebhook(request: Request) {
   } else if (
     mappedStatus === "paid" &&
     order.status === "pending" &&
-    order.kind === "booking" &&
     !(await hasCompleteActiveBookingHold(order))
   ) {
     processingError = "Pagamento aprovado sem todas as reservas ativas; conferir manualmente.";

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Clock3, Copy, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -35,6 +35,7 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
   const [checkout, setCheckout] = useState(initialCheckout);
   const [remaining, setRemaining] = useState(() => remainingSeconds(initialCheckout.expiresAt));
   const [approving, setApproving] = useState(false);
+  const reportedPaidOrder = useRef<string | null>(null);
   const [expired, setExpired] = useState(
     () =>
       initialCheckout.status === "expired" ||
@@ -64,18 +65,25 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
         if (current.status === "paid") {
           window.clearInterval(poll);
           toast.success(
-            current.kind === "class_plan"
-              ? "Pagamento confirmado e créditos liberados"
-              : "Pagamento confirmado e reserva garantida",
+            current.kind === "class_plan" && current.bookingIds.length > 0
+              ? "Pagamento confirmado, plano ativado e aula reservada"
+              : current.kind === "class_plan"
+                ? "Pagamento confirmado e créditos liberados"
+                : "Pagamento confirmado e reserva garantida",
           );
-          onPaid(current);
         }
       } catch {
         // Webhook is authoritative; a transient status read is retried.
       }
     }, 5_000);
     return () => window.clearInterval(poll);
-  }, [checkout.orderId, checkout.status, isLocal, onPaid]);
+  }, [checkout.orderId, checkout.status, isLocal]);
+
+  useEffect(() => {
+    if (checkout.status !== "paid" || reportedPaidOrder.current === checkout.orderId) return;
+    reportedPaidOrder.current = checkout.orderId;
+    onPaid(checkout);
+  }, [checkout, onPaid]);
 
   const countdown = useMemo(() => {
     const minutes = Math.floor(remaining / 60);
@@ -94,11 +102,12 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
       const paid = await approveLocalPixCheckout(checkout);
       setCheckout(paid);
       toast.success(
-        paid.kind === "class_plan"
-          ? "Pagamento aprovado e créditos liberados"
-          : "Pagamento aprovado e reserva confirmada",
+        paid.kind === "class_plan" && paid.bookingIds.length > 0
+          ? "Pagamento aprovado, plano ativado e aula reservada"
+          : paid.kind === "class_plan"
+            ? "Pagamento aprovado e créditos liberados"
+            : "Pagamento aprovado e reserva confirmada",
       );
-      onPaid(paid);
     } catch (error: any) {
       toast.error(error?.message ?? "Não foi possível aprovar o pagamento.");
     } finally {
@@ -139,7 +148,9 @@ export function PixCheckoutDialog({ checkout: initialCheckout, onClose, onPaid }
             <div className="mt-4 text-xl font-bold">{brl(checkout.amountCents)}</div>
             <p className="mt-2 text-sm text-muted-foreground">
               {isPlan
-                ? "Seus créditos já estão disponíveis em Minhas Aulas e podem ser usados na Agenda."
+                ? checkout.bookingIds.length > 0
+                  ? "Seu plano foi ativado e a aula escolhida está confirmada. Consulte a data e o horário em Próximas reservas."
+                  : "Seus créditos já estão disponíveis em Minhas Aulas e podem ser usados na Agenda."
                 : "Sua reserva está confirmada. Você pode consultá-la na Agenda."}
             </p>
           </div>

@@ -52,12 +52,13 @@ try {
   await page.waitForTimeout(600);
   await page.screenshot({ path: ".output/shared-session-agenda-mobile.png", fullPage: true });
 
-  await page.getByRole("button", { name: "Comprar plano com Pix" }).click();
+  await page.getByRole("button", { name: "Comprar plano e reservar" }).click();
   await page.getByRole("heading", { name: "Pagar com Pix" }).waitFor();
   await page.getByRole("button", { name: "Simular pagamento aprovado" }).click();
-  await page.getByText(/Pagamento aprovado e cr.ditos liberados/, { exact: true }).waitFor();
+  await page
+    .getByText(/Pagamento aprovado, plano ativado e aula reservada/, { exact: true })
+    .waitFor();
   await page.getByRole("button", { name: "Concluir", exact: true }).click();
-  await page.getByRole("button", { name: /Reservar com 1 cr.dito/ }).click();
   await page.getByRole("button", { name: /12:00 Sua vaga 1\/3 · 2 restantes/ }).waitFor();
   await page.screenshot({ path: ".output/shared-session-owned-mobile.png", fullPage: true });
 

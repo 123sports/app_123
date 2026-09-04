@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-const REVIEWABLE_ORDER_STATUSES = ["pending", "expired", "cancelled", "failed"];
+const REVIEWABLE_ORDER_STATUSES = ["pending", "paid", "expired", "cancelled", "failed"];
 
 function friendlyReviewMessage(orderId: string, reason: string) {
   const reference = orderId.slice(0, 8).toUpperCase();

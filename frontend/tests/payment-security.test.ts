@@ -24,7 +24,7 @@ test("normalizes Mercado Pago terminal and review statuses", () => {
   assert.equal(mercadoPagoPaymentStatus("approved", "accredited"), "paid");
   assert.equal(mercadoPagoPaymentStatus("refunded", "refunded"), "refunded");
   assert.equal(mercadoPagoPaymentStatus("refunded", "partially_refunded"), "paid_needs_review");
-  assert.equal(mercadoPagoPaymentStatus("charged_back", "in_process"), "paid_needs_review");
+  assert.equal(mercadoPagoPaymentStatus("charged_back", "in_process"), "refunded");
   assert.equal(mercadoPagoPaymentStatus("expired", "expired"), "expired");
 });
 
@@ -35,6 +35,17 @@ test("never regresses a paid or refunded order", () => {
   });
   assert.equal(decidePaymentTransition("paid", "failed").nextOrderStatus, null);
   assert.equal(decidePaymentTransition("refunded", "paid").nextOrderStatus, null);
+});
+
+test("freezes a paid order that receives a verified partial refund", () => {
+  assert.deepEqual(decidePaymentTransition("paid", "paid_needs_review"), {
+    nextOrderStatus: "paid_needs_review",
+    reviewReason: "Pagamento com estorno parcial ou contestacao; conferir manualmente.",
+  });
+  assert.deepEqual(decidePaymentTransition("paid_needs_review", "paid_needs_review"), {
+    nextOrderStatus: null,
+    reviewReason: null,
+  });
 });
 
 test("allows a verified full refund from every non-refunded state", () => {

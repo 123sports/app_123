@@ -23,7 +23,14 @@ const vacancyConcurrencyMigration = fs.readFileSync(
   ),
   "utf8",
 );
-const migration = `${consistencyMigration}\n${vacancyRefreshMigration}\n${vacancyConcurrencyMigration}`;
+const planBookingMigration = fs.readFileSync(
+  new URL(
+    "../../backend/supabase/migrations/20260904010000_plan_checkout_initial_booking.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const migration = `${consistencyMigration}\n${vacancyRefreshMigration}\n${vacancyConcurrencyMigration}\n${planBookingMigration}`;
 const paymentAdmin = fs.readFileSync(
   new URL("../src/lib/payments-admin.functions.ts", import.meta.url),
   "utf8",
@@ -112,7 +119,12 @@ test("open catalogs refresh after administrator changes", () => {
 test("student booking uses only active class plans and keeps legacy pricing hidden", () => {
   assert.match(studentAgenda, /from\("class_plans"\)[\s\S]*eq\("active", true\)/);
   assert.match(studentAgenda, /id="booking-plan"[\s\S]*plans\.map/);
-  assert.match(studentAgenda, /createClassPlanPixCheckout\(\{ planId: activePlan\.id \}\)/);
+  assert.match(
+    studentAgenda,
+    /createClassPlanPixCheckout\(\{[\s\S]*planId: activePlan\.id,[\s\S]*initialBooking:[\s\S]*bookingDate: selectedDate,[\s\S]*startHour,[\s\S]*bookingType:[\s\S]*professorId: bookingProfessor/,
+  );
+  assert.match(studentAgenda, /Comprar plano e reservar/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.create_class_plan_booking_checkout/i);
   assert.doesNotMatch(studentAgenda, /createBookingPixCheckout/);
   assert.match(studentAgenda, /\[3, 4\][\s\S]*bookingTypeForPlan\(activePlan, size\)/);
   assert.match(paymentServer, /ENABLE_DIRECT_BOOKING_PIX !== "true"/);
@@ -127,6 +139,8 @@ test("student views expose shared occupancy without participant identities", () 
   assert.match(studentDashboard, /reservation_session_availability/);
   assert.match(studentDashboard, /b\.occupied_seats\}\/\{b\.session_capacity\} ocupadas/);
   assert.match(studentDashboard, /table: "reservation_sessions"[\s\S]*refresh/);
+  assert.match(studentDashboard, /const today = format\(new Date\(\), "yyyy-MM-dd"\)/);
+  assert.doesNotMatch(studentDashboard, /new Date\(\)\.toISOString\(\)\.slice\(0, 10\)/);
 });
 
 test("plan creation and later changes are audited", () => {

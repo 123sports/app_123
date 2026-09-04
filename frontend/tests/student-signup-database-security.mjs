@@ -34,6 +34,10 @@ const password = `Audit-${crypto.randomBytes(18).toString("base64url")}`;
 let userId = null;
 let incompleteUserId = null;
 let namelessUserId = null;
+let invitedEmailUserId = null;
+let tokenInviteUserId = null;
+let inviteId = null;
+let tokenInviteId = null;
 
 try {
   const { data: incompleteUser, error: incompleteUserError } = await admin.auth.admin.createUser({
@@ -59,6 +63,82 @@ try {
   });
   namelessUserId = namelessUser.user?.id ?? null;
   assert.ok(namelessUserError, "database must reject a student signup without an explicit name");
+
+  const { data: adminRole, error: adminRoleError } = await admin
+    .from("user_roles")
+    .select("user_id")
+    .eq("role", "admin")
+    .limit(1)
+    .single();
+  if (adminRoleError) throw adminRoleError;
+
+  const invitedEmail = `signup-invited-email-${Date.now()}@example.invalid`;
+  const { data: emailInvite, error: emailInviteError } = await admin
+    .from("staff_invites")
+    .insert({ email: invitedEmail, role: "professor", invited_by: adminRole.user_id })
+    .select("id")
+    .single();
+  if (emailInviteError) throw emailInviteError;
+  inviteId = emailInvite.id;
+
+  const { data: invitedEmailUser, error: invitedEmailUserError } =
+    await admin.auth.admin.createUser({
+      email: invitedEmail,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: "Cadastro Sem Token",
+        phone: "(51) 99999-0001",
+        role: "admin",
+      },
+    });
+  if (invitedEmailUserError || !invitedEmailUser.user) {
+    throw invitedEmailUserError ?? new Error("invited-email user was not created");
+  }
+  invitedEmailUserId = invitedEmailUser.user.id;
+
+  const [{ data: invitedEmailRoles }, { data: untouchedInvite }] = await Promise.all([
+    admin.from("user_roles").select("role").eq("user_id", invitedEmailUserId),
+    admin.from("staff_invites").select("status").eq("id", inviteId).single(),
+  ]);
+  assert.deepEqual(
+    invitedEmailRoles.map((entry) => entry.role),
+    ["aluno"],
+    "knowing an invited email must not grant a staff role",
+  );
+  assert.equal(untouchedInvite.status, "pendente", "an invite without its token must stay pending");
+
+  const tokenInviteEmail = `signup-invite-token-${Date.now()}@example.invalid`;
+  const { data: tokenInvite, error: tokenInviteError } = await admin
+    .from("staff_invites")
+    .insert({ email: tokenInviteEmail, role: "professor", invited_by: adminRole.user_id })
+    .select("id, token")
+    .single();
+  if (tokenInviteError) throw tokenInviteError;
+  tokenInviteId = tokenInvite.id;
+
+  const { data: tokenInviteUser, error: tokenInviteUserError } =
+    await admin.auth.admin.createUser({
+      email: tokenInviteEmail,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: "Cadastro Com Token",
+        phone: "(51) 99999-0002",
+        staff_invite_token: tokenInvite.token,
+      },
+    });
+  if (tokenInviteUserError || !tokenInviteUser.user) {
+    throw tokenInviteUserError ?? new Error("token-invite user was not created");
+  }
+  tokenInviteUserId = tokenInviteUser.user.id;
+
+  const [{ data: tokenInviteRoles }, { data: acceptedInvite }] = await Promise.all([
+    admin.from("user_roles").select("role").eq("user_id", tokenInviteUserId),
+    admin.from("staff_invites").select("status").eq("id", tokenInviteId).single(),
+  ]);
+  assert.deepEqual(tokenInviteRoles.map((entry) => entry.role), ["professor"]);
+  assert.equal(acceptedInvite.status, "aceito");
 
   const { data: created, error: createError } = await student.auth.signUp({
     email,
@@ -116,7 +196,7 @@ try {
   assert.ok(escalationError, "student must not be able to assign an admin role");
 
   console.log(
-    "PASS: public signup grants immediate access, normalizes contact, assigns aluno and blocks escalation.",
+    "PASS: public signup assigns aluno and staff promotion requires the matching invite token.",
   );
 } finally {
   await student.auth.signOut();
@@ -130,6 +210,22 @@ try {
   }
   if (userId) {
     const { error } = await admin.auth.admin.deleteUser(userId);
+    if (error) throw error;
+  }
+  if (invitedEmailUserId) {
+    const { error } = await admin.auth.admin.deleteUser(invitedEmailUserId);
+    if (error) throw error;
+  }
+  if (tokenInviteUserId) {
+    const { error } = await admin.auth.admin.deleteUser(tokenInviteUserId);
+    if (error) throw error;
+  }
+  if (inviteId) {
+    const { error } = await admin.from("staff_invites").delete().eq("id", inviteId);
+    if (error) throw error;
+  }
+  if (tokenInviteId) {
+    const { error } = await admin.from("staff_invites").delete().eq("id", tokenInviteId);
     if (error) throw error;
   }
 }

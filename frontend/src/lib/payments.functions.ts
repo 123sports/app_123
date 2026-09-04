@@ -49,6 +49,15 @@ const cancelSchema = z
 const createPlanSchema = z
   .object({
     planId: z.string().uuid(),
+    initialBooking: z
+      .object({
+        bookingDate: z.string().refine(isValidBookingDate, "Data de reserva invalida."),
+        startHour: z.number().int().min(6).max(22),
+        bookingType: z.enum(["aula_individual", "aula_dupla", "aula_trio", "aula_quarteto"]),
+        professorId: z.string().uuid(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -60,6 +69,15 @@ type HoldResult = {
   description: string;
   expires_at: string;
   idempotency_key: string;
+  initial_booking?: {
+    booking_id: string;
+    session_id: string;
+    booking_date: string;
+    start_hour: number;
+    booking_type: string;
+    professor_id: string | null;
+    capacity: number;
+  } | null;
 };
 
 function redactSensitiveString(value: string) {
@@ -518,16 +536,28 @@ export const createClassPlanPixCheckoutServer = createServerFn({ method: "POST" 
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => createPlanSchema.parse(data))
   .handler(async ({ data, context }) => {
+    if (data.initialBooking) {
+      assertBookingSchedule(data.initialBooking.bookingDate, data.initialBooking.startHour);
+    }
     const localSimulation = localPaymentSimulationAllowed();
     if (!localSimulation && !isMercadoPagoConfigured()) {
       throw new Error("Mercado Pago ainda nao foi configurado no servidor.");
     }
     const productionPayer = localSimulation ? null : await getProductionPayer(context.userId);
 
-    const { data: holdData, error: holdError } = await (supabaseAdmin as any).rpc(
-      "create_class_plan_checkout",
-      { p_user_id: context.userId, p_plan_id: data.planId },
-    );
+    const { data: holdData, error: holdError } = data.initialBooking
+      ? await (supabaseAdmin as any).rpc("create_class_plan_booking_checkout", {
+          p_user_id: context.userId,
+          p_plan_id: data.planId,
+          p_booking_date: data.initialBooking.bookingDate,
+          p_start_hour: data.initialBooking.startHour,
+          p_booking_type: data.initialBooking.bookingType,
+          p_professor_id: data.initialBooking.professorId,
+        })
+      : await (supabaseAdmin as any).rpc("create_class_plan_checkout", {
+          p_user_id: context.userId,
+          p_plan_id: data.planId,
+        });
     if (holdError || !holdData) {
       throw new Error(holdError?.message ?? "Nao foi possivel iniciar a compra do plano.");
     }
@@ -566,8 +596,8 @@ export const createClassPlanPixCheckoutServer = createServerFn({ method: "POST" 
       return {
         orderId: hold.order_id,
         paymentId: paymentAttemptId,
-        bookingIds: [],
-        sessionIds: [],
+        bookingIds: hold.booking_ids,
+        sessionIds: hold.session_ids,
         amountCents: hold.amount_cents,
         pixCopyPaste,
         qrCodeDataUrl,
@@ -717,6 +747,26 @@ export const createClassPlanPixCheckoutServer = createServerFn({ method: "POST" 
       throw new Error("Pagamento recebido e em analise. Nao faca outro pagamento.");
     }
 
+    if (
+      initialPaymentStatus === "paid" &&
+      !(await hasCompleteActiveBookingHold({
+        id: hold.order_id,
+        kind: "class_plan",
+        amount_cents: hold.amount_cents,
+        metadata: {
+          initial_booking: hold.initial_booking,
+          booking_ids: hold.booking_ids,
+          session_ids: hold.session_ids,
+        },
+      }))
+    ) {
+      await flagPaymentForReview(
+        hold.order_id,
+        "Pagamento de plano aprovado sem a primeira reserva ativa; conferir manualmente.",
+      );
+      throw new Error("Pagamento aprovado e em conciliacao. Nao faca outro pagamento.");
+    }
+
     if (["cancelled", "failed", "expired", "refunded"].includes(initialPaymentStatus)) {
       const terminalPatch =
         initialPaymentStatus === "refunded"
@@ -762,8 +812,8 @@ export const createClassPlanPixCheckoutServer = createServerFn({ method: "POST" 
     return {
       orderId: hold.order_id,
       paymentId: paymentAttemptId,
-      bookingIds: [],
-      sessionIds: [],
+      bookingIds: hold.booking_ids,
+      sessionIds: hold.session_ids,
       amountCents: hold.amount_cents,
       pixCopyPaste: qrCode,
       qrCodeDataUrl: `data:image/png;base64,${qrCodeBase64}`,
@@ -785,7 +835,7 @@ export const syncBookingPixCheckoutServer = createServerFn({ method: "POST" })
 
     const { data: order, error: orderError } = await (supabaseAdmin as any)
       .from("checkout_orders")
-      .select("id, user_id, kind, amount_cents, currency, status, expires_at")
+      .select("id, user_id, kind, amount_cents, currency, status, expires_at, metadata")
       .eq("id", data.orderId)
       .maybeSingle();
     if (orderError) throw new Error(orderError.message);
@@ -844,7 +894,6 @@ export const syncBookingPixCheckoutServer = createServerFn({ method: "POST" })
     } else if (
       mappedStatus === "paid" &&
       order.status === "pending" &&
-      order.kind === "booking" &&
       !(await hasCompleteActiveBookingHold(order))
     ) {
       processingError = "Pagamento aprovado sem todas as reservas ativas; conferir manualmente.";

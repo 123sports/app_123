@@ -78,7 +78,11 @@ export function mercadoPagoPaymentStatus(
   status?: string | null,
   statusDetail?: string | null,
 ): ReconciledPaymentStatus {
-  if (statusDetail === "partially_refunded" || status === "charged_back") {
+  if (status === "charged_back") {
+    return "refunded";
+  }
+
+  if (statusDetail === "partially_refunded") {
     return "paid_needs_review";
   }
 
@@ -104,8 +108,11 @@ export function decidePaymentTransition(
   paymentStatus: ReconciledPaymentStatus,
 ): PaymentTransitionDecision {
   if (paymentStatus === "paid_needs_review") {
+    if (orderStatus === "paid_needs_review") {
+      return { nextOrderStatus: null, reviewReason: null };
+    }
     return {
-      nextOrderStatus: null,
+      nextOrderStatus: "paid_needs_review",
       reviewReason: "Pagamento com estorno parcial ou contestacao; conferir manualmente.",
     };
   }
