@@ -202,10 +202,12 @@ await runCase("admin plan create, update, deactivate and student catalog sync", 
 
   await setAudience(page, "equipe");
   await page.goto(`${baseUrl}/admin/aulas-planos`, { waitUntil: "networkidle" });
-  page.once("dialog", (prompt) => prompt.accept());
   await planCard(page, "Dupla integracao E2E")
     .getByRole("button", { name: /Desativar/ })
     .click();
+  const deactivationDialog = page.getByRole("alertdialog");
+  await deactivationDialog.getByRole("heading", { name: "Desativar este plano?" }).waitFor();
+  await deactivationDialog.getByRole("button", { name: "Desativar plano" }).click();
   await page.getByText("Plano desativado", { exact: true }).waitFor();
 
   await setAudience(page, "aluno");
@@ -302,8 +304,10 @@ await runCase(
 
     await page.goto(`${baseUrl}/app/agenda`, { waitUntil: "networkidle" });
     await selectDate(page, 7);
-    page.once("dialog", (prompt) => prompt.accept());
     await page.getByRole("button", { name: "Cancelar aula" }).click();
+    const cancellationDialog = page.getByRole("alertdialog");
+    await cancellationDialog.getByRole("heading", { name: "Cancelar esta aula?" }).waitFor();
+    await cancellationDialog.getByRole("button", { name: "Cancelar aula" }).click();
     await page.getByText(/Aula cancelada e cr.dito devolvido/, { exact: true }).waitFor();
 
     const cancelledBookings = await readRows(page, storageKeys.bookings);
@@ -516,8 +520,10 @@ await runCase("late cancellation releases the seat but forfeits the credit", asy
   await setAudience(page, "aluno");
   await page.goto(`${baseUrl}/app/agenda`, { waitUntil: "networkidle" });
   await selectDate(page, 5);
-  page.once("dialog", (prompt) => prompt.accept());
   await page.getByRole("button", { name: "Cancelar aula" }).click();
+  const cancellationDialog = page.getByRole("alertdialog");
+  await cancellationDialog.getByRole("heading", { name: "Cancelar esta aula?" }).waitFor();
+  await cancellationDialog.getByRole("button", { name: "Cancelar aula" }).click();
   await page.getByText("Aula cancelada", { exact: true }).waitFor();
 
   const bookings = await readRows(page, storageKeys.bookings);

@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useConfirmation } from "@/hooks/use-confirmation";
 
 export const Route = createFileRoute("/_authenticated/admin/leads")({
   component: AdminLeads,
@@ -24,6 +25,7 @@ type Lead = {
 const STATUSES = ["novo", "em_contato", "convertido", "descartado"];
 
 function AdminLeads() {
+  const requestConfirmation = useConfirmation();
   const [rows, setRows] = useState<Lead[]>([]);
   const [filter, setFilter] = useState("all");
 
@@ -45,7 +47,14 @@ function AdminLeads() {
   };
 
   const remove = async (id: string) => {
-    if (!confirm("Excluir este lead?")) return;
+    const confirmed = await requestConfirmation({
+      title: "Excluir este contato?",
+      description: "Os dados deste possível aluno serão removidos permanentemente.",
+      confirmLabel: "Excluir contato",
+      cancelLabel: "Manter contato",
+      destructive: true,
+    });
+    if (!confirmed) return;
     const { error } = await (supabase as any).from("leads").delete().eq("id", id);
     if (error) return toast.error(error?.message ?? "Não foi possível excluir o lead. Tente de novo.");
     setRows((rs) => rs.filter((r) => r.id !== id));

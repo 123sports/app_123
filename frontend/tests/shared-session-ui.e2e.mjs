@@ -76,8 +76,18 @@ try {
   await page.evaluate(() => localStorage.setItem("session_audience", "aluno"));
   await page.goto(`${baseUrl}/app/agenda`, { waitUntil: "networkidle" });
   await selectFutureDate(page, 5);
-  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Cancelar aula" }).click();
+  const cancellationDialog = page.getByRole("alertdialog");
+  await cancellationDialog.getByRole("heading", { name: "Cancelar esta aula?" }).waitFor();
+  await cancellationDialog.getByRole("button", { name: "Manter aula" }).click();
+  await cancellationDialog.waitFor({ state: "hidden" });
+  await page.getByRole("button", { name: /12:00 Sua vaga 1\/3/ }).waitFor();
+
+  await page.getByRole("button", { name: "Cancelar aula" }).click();
+  await cancellationDialog.getByRole("heading", { name: "Cancelar esta aula?" }).waitFor();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: ".output/class-cancellation-dialog-mobile.png" });
+  await cancellationDialog.getByRole("button", { name: "Cancelar aula" }).click();
   await page.getByText(/Aula cancelada e cr.dito devolvido/, { exact: true }).waitFor();
 
   assert.deepEqual(pageErrors, [], `Browser errors: ${pageErrors.join(" | ")}`);

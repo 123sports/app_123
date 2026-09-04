@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  addIsoDateDays,
   bookingScheduleError,
   hasBookingMinimumNotice,
   isValidBookingDate,
   venueBookingStartMs,
+  venueDateKey,
+  venueMonthUtcRange,
 } from "../src/lib/booking-schedule.ts";
 
 const NOW = Date.parse("2026-08-24T12:00:00-03:00");
@@ -18,6 +21,19 @@ test("validates real calendar dates", () => {
 
 test("interprets booking hours in the Sao Paulo venue timezone", () => {
   assert.equal(venueBookingStartMs("2026-08-24", 15), Date.parse("2026-08-24T15:00:00-03:00"));
+});
+
+test("derives dashboard calendar boundaries from the venue timezone", () => {
+  const justBeforeSeptemberInSaoPaulo = Date.parse("2026-09-01T02:30:00Z");
+  const justAfterSeptemberInSaoPaulo = Date.parse("2026-09-01T03:30:00Z");
+
+  assert.equal(venueDateKey(justBeforeSeptemberInSaoPaulo), "2026-08-31");
+  assert.equal(venueDateKey(justAfterSeptemberInSaoPaulo), "2026-09-01");
+  assert.equal(addIsoDateDays("2026-08-31", 6), "2026-09-06");
+  assert.deepEqual(venueMonthUtcRange(justAfterSeptemberInSaoPaulo), {
+    from: "2026-09-01T03:00:00.000Z",
+    until: "2026-10-01T03:00:00.000Z",
+  });
 });
 
 test("requires at least two hours of notice", () => {

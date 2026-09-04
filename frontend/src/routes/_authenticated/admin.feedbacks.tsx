@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
+import { useConfirmation } from "@/hooks/use-confirmation";
 
 export const Route = createFileRoute("/_authenticated/admin/feedbacks")({
   component: AdminFeedbacks,
@@ -26,6 +27,7 @@ type Feedback = {
 };
 
 function AdminFeedbacks() {
+  const requestConfirmation = useConfirmation();
   const { staffRole } = Route.useRouteContext();
   const [rows, setRows] = useState<Feedback[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
@@ -59,7 +61,14 @@ function AdminFeedbacks() {
 
   const remove = async (id: string) => {
     playPop();
-    if (!confirm("Excluir este feedback?")) return;
+    const confirmed = await requestConfirmation({
+      title: "Excluir este feedback?",
+      description: "O comentário e a avaliação associados serão removidos permanentemente.",
+      confirmLabel: "Excluir feedback",
+      cancelLabel: "Manter feedback",
+      destructive: true,
+    });
+    if (!confirmed) return;
     const { error } = await (supabase as any).from("professor_feedback").delete().eq("id", id);
     if (error) return toast.error(error?.message ?? "Não foi possível remover o feedback. Tente de novo.");
     setRows((rs) => rs.filter((r) => r.id !== id));

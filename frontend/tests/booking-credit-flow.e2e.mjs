@@ -94,8 +94,10 @@ try {
     0,
     "The confirmed slot remained selected and offered a duplicate credit booking.",
   );
-  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Cancelar aula" }).click();
+  const groupCancellation = page.getByRole("alertdialog");
+  await groupCancellation.getByRole("heading", { name: "Cancelar esta aula?" }).waitFor();
+  await groupCancellation.getByRole("button", { name: "Cancelar aula" }).click();
   await page.getByText(/Aula cancelada e cr.dito devolvido/, { exact: true }).waitFor();
 
   await planSelect.selectOption("20000000-0000-4000-8000-000000000001");
@@ -115,8 +117,10 @@ try {
     .waitFor();
   await page.getByRole("button", { name: "Concluir", exact: true }).click();
   await page.getByRole("button", { name: /10:00 Sua vaga/ }).waitFor();
-  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Cancelar aula" }).click();
+  const individualCancellation = page.getByRole("alertdialog");
+  await individualCancellation.getByRole("heading", { name: "Cancelar esta aula?" }).waitFor();
+  await individualCancellation.getByRole("button", { name: "Cancelar aula" }).click();
   await page.getByText("Aula cancelada e crédito devolvido", { exact: true }).last().waitFor();
 
   assert.deepEqual(pageErrors, [], `Browser errors: ${pageErrors.join(" | ")}`);

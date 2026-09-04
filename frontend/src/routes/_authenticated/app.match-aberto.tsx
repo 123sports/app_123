@@ -7,6 +7,7 @@ import { Loader2, Plus, Users, Clock, CalendarDays, X, LogIn, LogOut } from "luc
 import { MatchDrawCard } from "@/components/MatchDrawCard";
 import { PlayerStatsLine, prefetchPlayerStats } from "@/components/PlayerStatsLine";
 import { PageHeader } from "@/components/PageHeader";
+import { useConfirmation } from "@/hooks/use-confirmation";
 
 export const Route = createFileRoute("/_authenticated/app/match-aberto")({
   component: MatchAbertoPage,
@@ -28,6 +29,7 @@ type Match = {
 };
 
 function MatchAbertoPage() {
+  const requestConfirmation = useConfirmation();
   const [me, setMe] = useState<string>("");
   const [tab, setTab] = useState<"abertos" | "meus">("abertos");
   const [matches, setMatches] = useState<Match[]>([]);
@@ -140,7 +142,14 @@ function MatchAbertoPage() {
 
   const cancel = async (m: Match) => {
     playPop();
-    if (!confirm("Cancelar esta vaga?")) return;
+    const confirmed = await requestConfirmation({
+      title: "Cancelar esta vaga?",
+      description: "A vaga deixará de aparecer como disponível para outros alunos.",
+      confirmLabel: "Cancelar vaga",
+      cancelLabel: "Manter vaga",
+      destructive: true,
+    });
+    if (!confirmed) return;
     const { error } = await (supabase as any)
       .from("open_matches")
       .update({ status: "cancelado", cancelled_reason: "Cancelado pelo criador" })

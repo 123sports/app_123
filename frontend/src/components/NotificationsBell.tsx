@@ -69,7 +69,13 @@ export function NotificationsBell() {
               n.kind === "credit_booking_confirmed"
             ) {
               toast.success(n.title, { description: n.body ?? undefined });
-            } else if (n.kind === "payment_review") {
+            } else if (
+              n.kind === "payment_review" ||
+              n.kind === "payment_expired" ||
+              n.kind === "payment_cancelled" ||
+              n.kind === "payment_failed" ||
+              n.kind === "payment_refunded"
+            ) {
               toast.warning(n.title, { description: n.body ?? undefined });
             } else {
               toast(n.title, { description: n.body ?? undefined });

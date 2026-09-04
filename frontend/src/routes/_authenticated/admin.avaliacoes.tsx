@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
 import { PageHeader } from "@/components/PageHeader";
+import { useConfirmation } from "@/hooks/use-confirmation";
 
 export const Route = createFileRoute("/_authenticated/admin/avaliacoes")({
   component: AdminEvaluations,
@@ -39,6 +40,7 @@ type Evaluation = {
 const defaultScores = () => Object.fromEntries(SKILLS.map((s) => [s.key, 5])) as Record<string, number>;
 
 function AdminEvaluations() {
+  const requestConfirmation = useConfirmation();
   const { staffRole } = Route.useRouteContext();
   const [students, setStudents] = useState<Student[]>([]);
   const [evals, setEvals] = useState<Evaluation[]>([]);
@@ -104,7 +106,16 @@ function AdminEvaluations() {
   };
 
   const removeEval = async (ev: Evaluation) => {
-    if (!confirm(`Excluir a avaliação de ${studentMap.get(ev.student_id) ?? "aluno"} em ${new Date(ev.evaluation_date).toLocaleDateString("pt-BR")}?`)) return;
+    const studentName = studentMap.get(ev.student_id) ?? "aluno";
+    const evaluationDate = new Date(ev.evaluation_date).toLocaleDateString("pt-BR");
+    const confirmed = await requestConfirmation({
+      title: "Excluir esta avaliação?",
+      description: `A avaliação de ${studentName}, feita em ${evaluationDate}, será removida permanentemente.`,
+      confirmLabel: "Excluir avaliação",
+      cancelLabel: "Manter avaliação",
+      destructive: true,
+    });
+    if (!confirmed) return;
     const { error } = await (supabase as any).from("student_evaluations").delete().eq("id", ev.id);
     if (error) { toast.error(error?.message ?? "Não foi possível excluir a avaliação. Tente de novo."); return; }
     toast.success("Avaliação excluída");

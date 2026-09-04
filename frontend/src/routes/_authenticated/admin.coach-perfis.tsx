@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { useConfirmation } from "@/hooks/use-confirmation";
 
 // "Dados dos Coaches" foi unificado dentro de "Equipe" (aba). A rota antiga
 // redireciona para manter links/bookmarks funcionando.
@@ -34,6 +35,7 @@ type Coach = {
 type StaffOption = { id: string; full_name: string | null; email: string };
 
 export function CoachProfilesPanel() {
+  const requestConfirmation = useConfirmation();
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [editing, setEditing] = useState<Coach | null>(null);
@@ -100,7 +102,14 @@ export function CoachProfilesPanel() {
   };
 
   const remove = async (user_id: string) => {
-    if (!confirm("Excluir esta ficha de coach?")) return;
+    const confirmed = await requestConfirmation({
+      title: "Excluir esta ficha?",
+      description: "Os dados profissionais deste coach serão removidos desta área.",
+      confirmLabel: "Excluir ficha",
+      cancelLabel: "Manter ficha",
+      destructive: true,
+    });
+    if (!confirmed) return;
     const { error } = await supabase.from("coach_profiles").delete().eq("user_id", user_id);
     if (error) toast.error(error?.message ?? "Não foi possível excluir a ficha. Tente de novo.");
     else { toast.success("Excluído"); load(); }

@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
 import { ViewTabs } from "@/components/ViewTabs";
 import { CoachProfilesPanel } from "./admin.coach-perfis";
+import { useConfirmation } from "@/hooks/use-confirmation";
 
 export const Route = createFileRoute("/_authenticated/admin/equipe")({
   component: AdminEquipe,
@@ -35,6 +36,7 @@ function AdminEquipe() {
 }
 
 function TeamPanel() {
+  const requestConfirmation = useConfirmation();
   const [isAdmin, setIsAdmin] = useState(false);
   const [invites, setInvites] = useState<any[]>([]);
   const [team, setTeam] = useState<any[]>([]);
@@ -96,7 +98,14 @@ function TeamPanel() {
   };
 
   const removeRole = async (user_id: string, r: string) => {
-    if (!confirm("Remover esse papel?")) return;
+    const confirmed = await requestConfirmation({
+      title: "Remover este acesso?",
+      description: `O papel de ${r} será removido deste usuário.`,
+      confirmLabel: "Remover acesso",
+      cancelLabel: "Manter acesso",
+      destructive: true,
+    });
+    if (!confirmed) return;
     const { error } = await supabase.from("user_roles").delete().eq("user_id", user_id).eq("role", r as any);
     if (error) {
       toast.error(error.message);

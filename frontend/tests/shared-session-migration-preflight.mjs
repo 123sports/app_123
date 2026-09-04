@@ -23,7 +23,7 @@ const [{ data: bookings, error: bookingError }, { data: pricing, error: pricingE
     db
       .from("bookings")
       .select(
-        "id, booking_date, start_hour, type, professor_id, status, payment_status, hold_expires_at, amount_cents, price_cents",
+        "id, booking_date, start_hour, type, professor_id, status, payment_status, hold_expires_at, amount_cents, price_cents, credit_grant_id",
       )
       .in("status", ["pendente", "confirmada"]),
     db.from("pricing").select("booking_type, price_cents"),
@@ -45,7 +45,9 @@ const classesWithoutProfessor = activeBookings.filter(
 );
 const invalidPrices = (pricing ?? []).filter((product) => product.price_cents <= 0);
 const invalidBookingAmounts = activeBookings.filter(
-  (booking) => Math.max(booking.amount_cents ?? 0, booking.price_cents ?? 0) <= 0,
+  (booking) =>
+    !booking.credit_grant_id &&
+    Math.max(booking.amount_cents ?? 0, booking.price_cents ?? 0) <= 0,
 );
 const slotCounts = new Map();
 for (const booking of activeBookings) {

@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/PageHeader";
+import { useConfirmation } from "@/hooks/use-confirmation";
 import { brl, cents as toCents } from "@/lib/money";
 
 export const Route = createFileRoute("/_authenticated/admin/aulas-planos")({
@@ -51,6 +52,7 @@ const PACKAGE_LABELS: Record<number, string> = {
 };
 
 function AdminAulasPlanos() {
+  const requestConfirmation = useConfirmation();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [edit, setEdit] = useState<Plan | null>(null);
   const [creating, setCreating] = useState(false);
@@ -79,7 +81,15 @@ function AdminAulasPlanos() {
   }, []);
 
   const deactivate = async (id: string) => {
-    if (!confirm("Desativar este plano? As compras anteriores serão preservadas.")) return;
+    const confirmed = await requestConfirmation({
+      title: "Desativar este plano?",
+      description:
+        "O plano deixará de aparecer para novas compras. Pagamentos, créditos e reservas anteriores serão preservados.",
+      confirmLabel: "Desativar plano",
+      cancelLabel: "Manter ativo",
+      destructive: true,
+    });
+    if (!confirmed) return;
     const { error } = await supabase.from("class_plans").update({ active: false }).eq("id", id);
     if (error) toast.error(error?.message ?? "Não foi possível desativar o plano.");
     else {

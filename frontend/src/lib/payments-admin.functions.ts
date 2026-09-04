@@ -31,6 +31,15 @@ function reviewResult(message: string) {
   return { status: "paid_needs_review" as const, resolved: false, message };
 }
 
+export const refreshAdminPaymentActivityServer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdmin(context.userId);
+    const { data, error } = await (supabaseAdmin as any).rpc("cleanup_expired_booking_holds");
+    if (error) throw new Error("Não foi possível atualizar os Pix expirados agora.");
+    return { expiredBookings: Number(data) || 0 };
+  });
+
 export const reconcileReviewedPaymentServer = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => reconcileSchema.parse(data))

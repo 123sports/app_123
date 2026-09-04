@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
 import { PageHeader } from "@/components/PageHeader";
+import { useConfirmation } from "@/hooks/use-confirmation";
 
 export const Route = createFileRoute("/_authenticated/admin/termos")({
   component: AdminTermosPage,
@@ -21,6 +22,7 @@ type Term = {
 };
 
 function AdminTermosPage() {
+  const requestConfirmation = useConfirmation();
   const [items, setItems] = useState<Term[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Term | null>(null);
@@ -48,7 +50,14 @@ function AdminTermosPage() {
   };
 
   const remove = async (t: Term) => {
-    if (!confirm(`Remover a versão "${t.version}"?`)) return;
+    const confirmed = await requestConfirmation({
+      title: "Remover esta versão?",
+      description: `A versão “${t.version}” do termo será removida permanentemente.`,
+      confirmLabel: "Remover versão",
+      cancelLabel: "Manter versão",
+      destructive: true,
+    });
+    if (!confirmed) return;
     playPop();
     const { error } = await (supabase as any).from("platform_terms").delete().eq("id", t.id);
     if (error) return toast.error(error?.message ?? "Não foi possível remover a versão. Tente de novo.");

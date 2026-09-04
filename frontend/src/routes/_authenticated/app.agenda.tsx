@@ -26,6 +26,7 @@ import {
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { PageHeader } from "@/components/PageHeader";
+import { useConfirmation } from "@/hooks/use-confirmation";
 import { PixCheckoutDialog } from "@/components/PixCheckoutDialog";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -122,6 +123,7 @@ type ReschedulingBooking = {
 };
 
 function Agenda() {
+  const requestConfirmation = useConfirmation();
   const [selected, setSelected] = useState(() => addDays(new Date(), 1));
   const [cursor, setCursor] = useState(() => selected);
   const [sessions, setSessions] = useState<SessionAvailability[]>([]);
@@ -568,7 +570,14 @@ function Agenda() {
       cancellationNoticeHours === 0
         ? "O crédito retorna se a aula ainda não tiver começado."
         : `O crédito retorna quando o cancelamento é feito com pelo menos ${cancellationNoticeHours} horas de antecedência.`;
-    if (!window.confirm(`Cancelar esta aula?\n\n${policy}`)) return;
+    const confirmed = await requestConfirmation({
+      title: "Cancelar esta aula?",
+      description: `A vaga será liberada imediatamente. ${policy}`,
+      confirmLabel: "Cancelar aula",
+      cancelLabel: "Manter aula",
+      destructive: true,
+    });
+    if (!confirmed) return;
     playPop();
     setLoading(true);
     try {

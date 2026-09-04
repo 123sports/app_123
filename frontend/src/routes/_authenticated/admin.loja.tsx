@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
 import { PageHeader } from "@/components/PageHeader";
+import { useConfirmation } from "@/hooks/use-confirmation";
 
 export const Route = createFileRoute("/_authenticated/admin/loja")({
   component: AdminLojaPage,
@@ -28,6 +29,7 @@ type Item = {
 const CATEGORIES = ["Raquete", "Bolinhas", "Vestuário", "Acessórios", "Calçados", "Cordas", "Outro"];
 
 function AdminLojaPage() {
+  const requestConfirmation = useConfirmation();
   const [items, setItems] = useState<Item[]>([]);
   const [imgs, setImgs] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -55,7 +57,14 @@ function AdminLojaPage() {
   useEffect(() => { load(); }, []);
 
   const remove = async (it: Item) => {
-    if (!confirm(`Remover "${it.title}"?`)) return;
+    const confirmed = await requestConfirmation({
+      title: "Remover este item?",
+      description: `“${it.title}” será removido da loja.`,
+      confirmLabel: "Remover item",
+      cancelLabel: "Manter item",
+      destructive: true,
+    });
+    if (!confirmed) return;
     playPop();
     if (it.image_path) await supabase.storage.from("marketplace").remove([it.image_path]);
     const { error } = await (supabase as any).from("marketplace_items").delete().eq("id", it.id);

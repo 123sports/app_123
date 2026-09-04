@@ -14,6 +14,7 @@ import { brl, cents as toCents } from "@/lib/money";
 import { computeDocumentHash, renderTemplate, statusLabel, readContractSnapshot, type ContractSnapshot } from "@/lib/contracts";
 import { ContractView } from "@/components/ContractView";
 import { PageHeader } from "@/components/PageHeader";
+import { useConfirmation } from "@/hooks/use-confirmation";
 
 export const Route = createFileRoute("/_authenticated/admin/aulas-contratos")({
   component: AdminAulasContratos,
@@ -150,6 +151,7 @@ function ContractAdminDialog({ contract, template, plan, student, onClose }: {
   contract: Contract; template: Template | null; plan: Plan | null; student: Profile | undefined;
   onClose: (u: boolean) => void;
 }) {
+  const requestConfirmation = useConfirmation();
   const [agree, setAgree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [counter, setCounter] = useState((contract.agreed_price_cents / 100).toFixed(2).replace(".", ","));
@@ -186,13 +188,27 @@ function ContractAdminDialog({ contract, template, plan, student, onClose }: {
   };
 
   const refuse = async () => {
-    if (!confirm("Recusar este contrato?")) return;
+    const confirmed = await requestConfirmation({
+      title: "Recusar este contrato?",
+      description: "O contrato será mantido no histórico com o status de recusado.",
+      confirmLabel: "Recusar contrato",
+      cancelLabel: "Voltar",
+      destructive: true,
+    });
+    if (!confirmed) return;
     const { error } = await supabase.from("class_contracts").update({ status: "recusado" as any }).eq("id", contract.id);
     if (error) toast.error(error?.message ?? "Não foi possível recusar o contrato. Tente de novo."); else { toast.success("Contrato recusado"); onClose(true); }
   };
 
   const close = async () => {
-    if (!confirm("Encerrar este contrato vigente?")) return;
+    const confirmed = await requestConfirmation({
+      title: "Encerrar este contrato?",
+      description: "O contrato deixará de ficar vigente, mas continuará disponível no histórico.",
+      confirmLabel: "Encerrar contrato",
+      cancelLabel: "Manter vigente",
+      destructive: true,
+    });
+    if (!confirmed) return;
     const { error } = await supabase.from("class_contracts").update({ status: "encerrado" as any }).eq("id", contract.id);
     if (error) toast.error(error?.message ?? "Não foi possível encerrar o contrato. Tente de novo."); else { toast.success("Contrato encerrado"); onClose(true); }
   };

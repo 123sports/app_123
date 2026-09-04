@@ -7,6 +7,7 @@ import { Loader2, Check, X, Users, Clock, CalendarDays, Trash2 } from "lucide-re
 import { MatchDrawCard } from "@/components/MatchDrawCard";
 import { PlayerStatsLine, prefetchPlayerStats } from "@/components/PlayerStatsLine";
 import { PageHeader } from "@/components/PageHeader";
+import { useConfirmation } from "@/hooks/use-confirmation";
 
 export const Route = createFileRoute("/_authenticated/admin/match-aberto")({
   component: AdminMatchAberto,
@@ -29,6 +30,7 @@ type Match = {
 };
 
 function AdminMatchAberto() {
+  const requestConfirmation = useConfirmation();
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"todos" | "pendente" | "aprovado" | "fechado" | "cancelado">("pendente");
@@ -94,7 +96,14 @@ function AdminMatchAberto() {
 
   const remove = async (id: string) => {
     playPop();
-    if (!confirm("Excluir esta vaga?")) return;
+    const confirmed = await requestConfirmation({
+      title: "Excluir esta vaga?",
+      description: "A publicação do match será removida permanentemente.",
+      confirmLabel: "Excluir vaga",
+      cancelLabel: "Manter vaga",
+      destructive: true,
+    });
+    if (!confirmed) return;
     const { error } = await (supabase as any).from("open_matches").delete().eq("id", id);
     if (error) toast.error(error?.message ?? "Não foi possível excluir. Tente de novo.");
     else toast.success("Excluído.");

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { playPop } from "@/lib/sfx";
 import { PageHeader } from "@/components/PageHeader";
+import { useConfirmation } from "@/hooks/use-confirmation";
 
 export const Route = createFileRoute("/_authenticated/admin/indicacoes")({
   component: AdminReferrals,
@@ -25,6 +26,7 @@ type Ranking = {
 };
 
 function AdminReferrals() {
+  const requestConfirmation = useConfirmation();
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [ranking, setRanking] = useState<Ranking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,7 +106,14 @@ function AdminReferrals() {
 
   const removeRule = async (id: string) => {
     playPop();
-    if (!confirm("Remover este nível?")) return;
+    const confirmed = await requestConfirmation({
+      title: "Remover este nível?",
+      description: "Esta regra de recompensa deixará de ser usada nas indicações.",
+      confirmLabel: "Remover nível",
+      cancelLabel: "Manter nível",
+      destructive: true,
+    });
+    if (!confirmed) return;
     const { error } = await (supabase as any).from("referral_rewards").delete().eq("id", id);
     if (error) return toast.error(error?.message ?? "Não foi possível remover o nível. Tente de novo.");
     toast.success("Removido");
